@@ -12,3 +12,6 @@ compile_commands.json
 .vscode/
 .idea/
 .DS_Store
+
+# Local agent instructions
+AGENTS.md
