@@ -49,6 +49,7 @@ typedef struct {
     TonieLang active_lang;
     TonieBrowseLevel level;
     uint16_t marquee_tick;
+    bool picker_mode;
 } TonieBrowserModel;
 
 struct TonieViewBrowser {
@@ -152,7 +153,12 @@ static void tonie_view_browser_draw_header(Canvas* canvas, const TonieBrowserMod
     snprintf(counter_str, sizeof(counter_str), "[%zu/%zu]", current, count);
     canvas_draw_str(canvas, 2, 10, counter_str);
 
-    /* Right side: Interactive 3-Tab Selector [DE | EN | FAV] (x: 61..127) */
+    /* Right side: either Series Picker title or Interactive 3-Tab Selector [DE | EN | FAV] */
+    if(model->picker_mode) {
+        canvas_draw_str_aligned(canvas, 125, 10, AlignRight, AlignBottom, "SERIE WAEHLEN");
+        return;
+    }
+
     const int16_t tab_x[3] = {61, 83, 105};
     const int16_t tab_w[3] = {21, 21, 22};
     const char* tab_lbl[3] = {"DE", "EN", "FAV"};
@@ -282,6 +288,12 @@ static void tonie_view_browser_draw_footer(Canvas* canvas, const TonieBrowserMod
     canvas_draw_line(canvas, 0, 52, 127, 52);
     canvas_set_font(canvas, FontSecondary);
 
+    if(model->picker_mode) {
+        canvas_draw_str_aligned(
+            canvas, 64, 62, AlignCenter, AlignBottom, "[OK] Serie waehlen  [Back]");
+        return;
+    }
+
     size_t count = model->library ? model->library->count : 0;
     bool selected_is_dir =
         (count > 0 && model->selected_index < count &&
@@ -354,8 +366,15 @@ static bool tonie_view_browser_input_callback(InputEvent* event, void* context) 
         return false;
     }
 
+    bool is_picker = false;
+    with_view_model(
+        instance->view,
+        TonieBrowserModel * model,
+        { is_picker = model->picker_mode; },
+        false);
+
     /* Handle Long-Press OK to toggle Favorite on a Tonie .nfc item */
-    if(event->key == InputKeyOk && event->type == InputTypeLong) {
+    if(!is_picker && event->key == InputKeyOk && event->type == InputTypeLong) {
         size_t count = 0;
         size_t selected = 0;
         bool is_dir = false;
@@ -388,7 +407,7 @@ static bool tonie_view_browser_input_callback(InputEvent* event, void* context) 
 
     bool consumed = false;
 
-    if(event->key == InputKeyLeft || event->key == InputKeyRight) {
+    if(!is_picker && (event->key == InputKeyLeft || event->key == InputKeyRight)) {
         if(event->type == InputTypeShort) {
             TonieLang next_lang = TonieLangGerman;
             with_view_model(
@@ -560,5 +579,15 @@ void tonie_view_browser_update_library(TonieViewBrowser* instance, const TonieLi
             model->marquee_tick = 0;
             tonie_view_browser_adjust_scroll(model);
         },
+        true);
+}
+
+void tonie_view_browser_set_picker_mode(TonieViewBrowser* instance, bool picker_mode) {
+    furi_check(instance);
+
+    with_view_model(
+        instance->view,
+        TonieBrowserModel * model,
+        { model->picker_mode = picker_mode; },
         true);
 }

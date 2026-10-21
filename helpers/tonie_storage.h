@@ -154,3 +154,28 @@ const char* tonie_storage_get_lang_label(TonieLang lang);
  * @brief Return base directory path for the given language.
  */
 const char* tonie_storage_get_lang_path(Storage* storage, TonieLang lang);
+
+/**
+ * @brief Populate `library` with `[+ Neue Serie anlegen]` at index 0 followed by all existing
+ *        Series folders in the target language directory for the Series Picker screen.
+ */
+size_t tonie_storage_scan_series_for_picker(
+    Storage* storage,
+    TonieLibrary* library,
+    TonieLang lang);
+
+/**
+ * @brief Sanitize a user-entered string for FAT32 directory or filename usage.
+ */
+void tonie_storage_sanitize_filename(const char* input, char* out, size_t out_size);
+
+/**
+ * @brief Create the target Series directory if needed and construct the full `.nfc` file path.
+ */
+bool tonie_storage_build_new_nfc_path(
+    Storage* storage,
+    TonieLang lang,
+    const char* series_folder_name,
+    const char* tonie_name,
+    char* out_path,
+    size_t out_size);

@@ -5,7 +5,14 @@
 
 typedef struct TonieViewSplash TonieViewSplash;
 
-typedef void (*TonieViewSplashStartCallback)(void* context);
+typedef enum {
+    TonieMenuActionSimulate = 0, // 1. Simulation
+    TonieMenuActionScan = 1,     // 2. Tonie scannen
+    TonieMenuActionSettings = 2, // 3. Einstellungen
+    TonieMenuActionCount
+} TonieMenuAction;
+
+typedef void (*TonieViewSplashMenuCallback)(void* context, TonieMenuAction action);
 
 /**
  * @brief Allocate the Splash Screen View instance.
@@ -23,9 +30,9 @@ void tonie_view_splash_free(TonieViewSplash* instance);
 View* tonie_view_splash_get_view(TonieViewSplash* instance);
 
 /**
- * @brief Set the callback invoked when the user presses OK to start.
+ * @brief Set the callback invoked when the user selects a main menu item with OK.
  */
-void tonie_view_splash_set_start_callback(
+void tonie_view_splash_set_menu_callback(
     TonieViewSplash* instance,
-    TonieViewSplashStartCallback on_start,
+    TonieViewSplashMenuCallback on_menu_select,
     void* context);

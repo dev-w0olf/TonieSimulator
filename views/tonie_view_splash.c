@@ -47,25 +47,37 @@ static const uint8_t tonie_splash_art_32x32[] = {
     0x00, 0xFC, 0x03, 0x00, /* 31: ..........########.............. */
 };
 
-/* 5x7 Play Triangle Icon (> START) for Footer */
-static const uint8_t tonie_play_arrow_5x7[] = {
-    0x01, /* #.... */
-    0x03, /* ##... */
-    0x07, /* ###.. */
-    0x0F, /* ####. */
-    0x07, /* ###.. */
-    0x03, /* ##... */
-    0x01, /* #.... */
+/* 4x7 Left Arrow (<) Icon for Menu Selector */
+static const uint8_t tonie_menu_arrow_left_4x7[] = {
+    0x08, /* ...# */
+    0x0C, /* ..## */
+    0x0E, /* .### */
+    0x0F, /* #### */
+    0x0E, /* .### */
+    0x0C, /* ..## */
+    0x08, /* ...# */
+};
+
+/* 4x7 Right Arrow (>) Icon for Menu Selector */
+static const uint8_t tonie_menu_arrow_right_4x7[] = {
+    0x01, /* #... */
+    0x03, /* ##.. */
+    0x07, /* ###. */
+    0x0F, /* #### */
+    0x07, /* ###. */
+    0x03, /* ##.. */
+    0x01, /* #... */
 };
 
 typedef struct {
     uint8_t wave_step;
+    TonieMenuAction selected_action;
 } TonieSplashModel;
 
 struct TonieViewSplash {
     View* view;
     FuriTimer* anim_timer;
-    TonieViewSplashStartCallback on_start;
+    TonieViewSplashMenuCallback on_menu_select;
     void* callback_context;
 };
 
@@ -121,14 +133,27 @@ static void tonie_view_splash_draw_callback(Canvas* canvas, void* context) {
         tonie_view_splash_draw_arc(canvas, 93, 23, 24, false);
     }
 
-    /* 5. Bottom Black Bar: [ > START ................. PRESS OK ] */
+    /* 5. Bottom Black Bar: Interactive Main Menu [< 1. Simulation >   [OK]] */
     canvas_set_color(canvas, ColorBlack);
     canvas_draw_box(canvas, 0, 53, 128, 11);
 
+    const char* menu_label = "1. Simulation";
+    if(model->selected_action == TonieMenuActionScan) {
+        menu_label = "2. Tonie scannen";
+    } else if(model->selected_action == TonieMenuActionSettings) {
+        menu_label = "3. Einstellungen";
+    }
+
     canvas_set_color(canvas, ColorWhite);
-    canvas_draw_xbm(canvas, 4, 55, 5, 7, tonie_play_arrow_5x7);
-    canvas_draw_str(canvas, 12, 62, "START");
-    canvas_draw_str_aligned(canvas, 124, 62, AlignRight, AlignBottom, "PRESS OK");
+    canvas_set_font(canvas, FontSecondary);
+    canvas_draw_xbm(canvas, 3, 55, 4, 7, tonie_menu_arrow_left_4x7);
+    canvas_draw_str_aligned(canvas, 53, 62, AlignCenter, AlignBottom, menu_label);
+    canvas_draw_xbm(canvas, 100, 55, 4, 7, tonie_menu_arrow_right_4x7);
+
+    /* Inverted [OK] button pill on the right edge */
+    canvas_draw_rbox(canvas, 108, 54, 18, 9, 2);
+    canvas_set_color(canvas, ColorBlack);
+    canvas_draw_str_aligned(canvas, 117, 62, AlignCenter, AlignBottom, "OK");
 }
 
 static void tonie_view_splash_timer_callback(void* context) {
@@ -166,12 +191,40 @@ static bool tonie_view_splash_input_callback(InputEvent* event, void* context) {
     TonieViewSplash* instance = context;
     furi_check(instance);
 
-    if(event->type == InputTypeShort) {
-        if(event->key == InputKeyOk || event->key == InputKeyRight ||
-           event->key == InputKeyLeft || event->key == InputKeyUp ||
-           event->key == InputKeyDown) {
-            if(instance->on_start) {
-                instance->on_start(instance->callback_context);
+    if(event->type == InputTypeShort || event->type == InputTypeRepeat) {
+        if(event->key == InputKeyRight || event->key == InputKeyDown) {
+            with_view_model(
+                instance->view,
+                TonieSplashModel * model,
+                {
+                    model->selected_action =
+                        (TonieMenuAction)(((int)model->selected_action + 1) %
+                                          (int)TonieMenuActionCount);
+                },
+                true);
+            return true;
+        } else if(event->key == InputKeyLeft || event->key == InputKeyUp) {
+            with_view_model(
+                instance->view,
+                TonieSplashModel * model,
+                {
+                    model->selected_action =
+                        (TonieMenuAction)(((int)model->selected_action +
+                                           (int)TonieMenuActionCount - 1) %
+                                          (int)TonieMenuActionCount);
+                },
+                true);
+            return true;
+        } else if(event->key == InputKeyOk && event->type == InputTypeShort) {
+            TonieMenuAction action = TonieMenuActionSimulate;
+            with_view_model(
+                instance->view,
+                TonieSplashModel * model,
+                { action = model->selected_action; },
+                false);
+
+            if(instance->on_menu_select) {
+                instance->on_menu_select(instance->callback_context, action);
             }
             return true;
         }
@@ -185,7 +238,7 @@ TonieViewSplash* tonie_view_splash_alloc(void) {
     furi_check(instance);
 
     instance->view = view_alloc();
-    instance->on_start = NULL;
+    instance->on_menu_select = NULL;
     instance->callback_context = NULL;
 
     view_allocate_model(instance->view, ViewModelTypeLocking, sizeof(TonieSplashModel));
@@ -201,7 +254,10 @@ TonieViewSplash* tonie_view_splash_alloc(void) {
     with_view_model(
         instance->view,
         TonieSplashModel * model,
-        { model->wave_step = 3; },
+        {
+            model->wave_step = 3;
+            model->selected_action = TonieMenuActionSimulate;
+        },
         false);
 
     return instance;
@@ -225,11 +281,11 @@ View* tonie_view_splash_get_view(TonieViewSplash* instance) {
     return instance->view;
 }
 
-void tonie_view_splash_set_start_callback(
+void tonie_view_splash_set_menu_callback(
     TonieViewSplash* instance,
-    TonieViewSplashStartCallback on_start,
+    TonieViewSplashMenuCallback on_menu_select,
     void* context) {
     furi_check(instance);
-    instance->on_start = on_start;
+    instance->on_menu_select = on_menu_select;
     instance->callback_context = context;
 }
