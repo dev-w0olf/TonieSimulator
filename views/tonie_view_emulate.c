@@ -171,7 +171,7 @@ static void tonie_view_emulate_draw_callback(Canvas* canvas, void* context) {
     canvas_set_font(canvas, FontSecondary);
     const size_t max_line_px = 101;
 
-    char line_name[80];
+    char line_name[TONIE_MAX_NAME_LEN + 16];
     tonie_view_emulate_marquee_str(
         canvas,
         "Name: ",
@@ -182,7 +182,7 @@ static void tonie_view_emulate_draw_callback(Canvas* canvas, void* context) {
         model->marquee_tick);
     canvas_draw_str(canvas, 25, 21, line_name);
 
-    char series_raw[64];
+    char series_raw[TONIE_MAX_SERIES_LEN + 12];
     const char* lang_short = (model->lang == TonieLangEnglish) ? "EN" : "DE";
     if(model->series_name[0] != '\0') {
         snprintf(series_raw, sizeof(series_raw), "%s (%s)", model->series_name, lang_short);
@@ -190,7 +190,7 @@ static void tonie_view_emulate_draw_callback(Canvas* canvas, void* context) {
         snprintf(series_raw, sizeof(series_raw), "%s", tonie_storage_get_lang_label(model->lang));
     }
 
-    char line_series[80];
+    char line_series[TONIE_MAX_SERIES_LEN + 24];
     tonie_view_emulate_marquee_str(
         canvas,
         "Serie: ",

@@ -183,7 +183,8 @@ static bool tonie_app_custom_event_callback(void* context, uint32_t event) {
                 if(item->is_directory) {
                     /* Enter selected Series subfolder */
                     char series_label[TONIE_MAX_SERIES_LEN];
-                    snprintf(series_label, sizeof(series_label), "%s", item->display_name);
+                    tonie_storage_get_item_display_name(
+                        item, series_label, sizeof(series_label));
                     app->library.saved_series_index = app->library.selected_index;
                     tonie_storage_scan_series_files(
                         app->storage,
@@ -201,6 +202,8 @@ static bool tonie_app_custom_event_callback(void* context, uint32_t event) {
                         app->library.active_series_name,
                         &app->config,
                         &details);
+                    tonie_storage_get_item_display_name(
+                        item, details.display_name, sizeof(details.display_name));
                     bool started = tonie_emulator_start(app->emulator, details.file_path);
                     tonie_view_emulate_set_item(
                         app->view_emulate, &details, app->library.active_lang, started);

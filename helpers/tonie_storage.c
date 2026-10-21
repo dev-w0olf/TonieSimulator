@@ -55,7 +55,7 @@ static bool tonie_storage_dir_has_entries(Storage* storage, const char* path) {
     File* dir = storage_file_alloc(storage);
     if(storage_dir_open(dir, path)) {
         FileInfo fi;
-        char name[64];
+        char name[256];
         while(storage_dir_read(dir, &fi, name, sizeof(name))) {
             if(name[0] != '.') {
                 has_entries = true;
@@ -341,6 +341,57 @@ static void tonie_storage_format_clean_name(
     out_name[copy_len] = '\0';
 }
 
+void tonie_storage_get_item_display_name(
+    const TonieItem* item,
+    char* out_name,
+    size_t max_len) {
+    if(!item || !out_name || max_len == 0) {
+        return;
+    }
+    out_name[0] = '\0';
+
+    if(item->is_directory) {
+        tonie_storage_format_clean_name(item->entry_name, out_name, max_len, false);
+        return;
+    }
+
+    const char* last_slash = strrchr(item->entry_name, '/');
+    if(!last_slash || last_slash == item->entry_name) {
+        tonie_storage_format_clean_name(item->entry_name, out_name, max_len, true);
+        return;
+    }
+
+    /* Nested file inside a subfolder of a Series (e.g. "GEOlino/Alles ueber Vulkane.nfc") */
+    char clean_file[TONIE_MAX_NAME_LEN];
+    tonie_storage_format_clean_name(last_slash + 1, clean_file, sizeof(clean_file), true);
+
+    const char* sub_start = last_slash - 1;
+    while(sub_start > item->entry_name && *sub_start != '/') {
+        sub_start--;
+    }
+    if(*sub_start == '/') {
+        sub_start++;
+    }
+
+    size_t sub_len = (size_t)(last_slash - sub_start);
+    char clean_sub[TONIE_MAX_SERIES_LEN];
+    if(sub_len >= sizeof(clean_sub)) {
+        sub_len = sizeof(clean_sub) - 1;
+    }
+    for(size_t i = 0; i < sub_len; i++) {
+        clean_sub[i] = (sub_start[i] == '_') ? ' ' : sub_start[i];
+    }
+    clean_sub[sub_len] = '\0';
+
+    if(clean_sub[0] != '\0' && strncasecmp(clean_file, clean_sub, strlen(clean_sub)) != 0) {
+        char combined[TONIE_MAX_SERIES_LEN + TONIE_MAX_NAME_LEN + 4];
+        snprintf(combined, sizeof(combined), "%s - %s", clean_sub, clean_file);
+        snprintf(out_name, max_len, "%s", combined);
+    } else {
+        snprintf(out_name, max_len, "%s", clean_file);
+    }
+}
+
 static void tonie_storage_extract_series_from_path(
     const char* file_path,
     char* out_series,
@@ -442,8 +493,12 @@ static void tonie_storage_sort_library(TonieLibrary* library) {
         return;
     }
 
+    char key_display[TONIE_MAX_NAME_LEN];
+    char cur_display[TONIE_MAX_NAME_LEN];
+
     for(size_t i = 1; i < library->count; i++) {
         TonieItem key = library->items[i];
+        tonie_storage_get_item_display_name(&key, key_display, sizeof(key_display));
         size_t j = i;
         while(j > 0) {
             if(library->items[j - 1].is_directory != key.is_directory) {
@@ -454,7 +509,9 @@ static void tonie_storage_sort_library(TonieLibrary* library) {
                 }
                 break;
             }
-            if(strcasecmp(library->items[j - 1].display_name, key.display_name) > 0) {
+            tonie_storage_get_item_display_name(
+                &library->items[j - 1], cur_display, sizeof(cur_display));
+            if(strcasecmp(cur_display, key_display) > 0) {
                 library->items[j] = library->items[j - 1];
                 j--;
             } else {
@@ -501,8 +558,6 @@ size_t tonie_storage_scan_series(
                 const char* base = strrchr(fav_path, '/');
                 base = base ? (base + 1) : fav_path;
                 snprintf(item->entry_name, sizeof(item->entry_name), "%s", base);
-                tonie_storage_format_clean_name(
-                    base, item->display_name, sizeof(item->display_name), true);
                 item->fav_index = (uint8_t)i;
                 item->is_directory = false;
                 item->is_favorite = true;
@@ -519,11 +574,16 @@ size_t tonie_storage_scan_series(
     File* dir = storage_file_alloc(storage);
     if(storage_dir_open(dir, dir_path)) {
         FileInfo file_info;
-        char entry_name[TONIE_MAX_NAME_LEN];
+        char raw_name[256];
 
         while(library->count < TONIE_MAX_ITEMS &&
-              storage_dir_read(dir, &file_info, entry_name, sizeof(entry_name))) {
-            if(entry_name[0] == '.') {
+              storage_dir_read(dir, &file_info, raw_name, sizeof(raw_name))) {
+            if(raw_name[0] == '.') {
+                continue;
+            }
+
+            size_t raw_len = strlen(raw_name);
+            if(raw_len >= TONIE_MAX_NAME_LEN) {
                 continue;
             }
 
@@ -531,26 +591,22 @@ size_t tonie_storage_scan_series(
                 /* Series subfolder */
                 TonieItem* item = &library->items[library->count];
                 memset(item, 0, sizeof(TonieItem));
-                snprintf(item->entry_name, sizeof(item->entry_name), "%s", entry_name);
-                tonie_storage_format_clean_name(
-                    entry_name, item->display_name, sizeof(item->display_name), false);
+                memcpy(item->entry_name, raw_name, raw_len + 1);
                 item->fav_index = 0xFF;
                 item->is_directory = true;
                 item->is_favorite = false;
                 library->count++;
-            } else if(tonie_storage_has_nfc_extension(entry_name)) {
+            } else if(tonie_storage_has_nfc_extension(raw_name)) {
                 /* Loose .nfc file directly in language directory */
                 char full_path[TONIE_PATH_MAX];
-                int written = snprintf(full_path, sizeof(full_path), "%s/%s", dir_path, entry_name);
+                int written = snprintf(full_path, sizeof(full_path), "%s/%s", dir_path, raw_name);
                 if(written < 0 || (size_t)written >= sizeof(full_path)) {
                     continue;
                 }
 
                 TonieItem* item = &library->items[library->count];
                 memset(item, 0, sizeof(TonieItem));
-                snprintf(item->entry_name, sizeof(item->entry_name), "%s", entry_name);
-                tonie_storage_format_clean_name(
-                    entry_name, item->display_name, sizeof(item->display_name), true);
+                memcpy(item->entry_name, raw_name, raw_len + 1);
                 item->fav_index = 0xFF;
                 item->is_directory = false;
                 item->is_favorite = tonie_storage_is_favorite(config, full_path);
@@ -564,6 +620,90 @@ size_t tonie_storage_scan_series(
 
     tonie_storage_sort_library(library);
     return library->count;
+}
+
+typedef struct {
+    FileInfo file_info;
+    char raw_name[256];
+    char rel_entry[TONIE_MAX_NAME_LEN];
+    char full_path[TONIE_PATH_MAX];
+} TonieDirScanFrame;
+
+static void tonie_storage_scan_series_dir_recursive(
+    Storage* storage,
+    TonieLibrary* library,
+    const TonieConfig* config,
+    const char* dir_path,
+    const char* rel_prefix,
+    uint8_t depth) {
+    if(depth > 3 || library->count >= TONIE_MAX_ITEMS) {
+        return;
+    }
+
+    TonieDirScanFrame* frame = malloc(sizeof(TonieDirScanFrame));
+    if(!frame) {
+        return;
+    }
+
+    File* dir = storage_file_alloc(storage);
+    if(storage_dir_open(dir, dir_path)) {
+        while(library->count < TONIE_MAX_ITEMS &&
+              storage_dir_read(
+                  dir, &frame->file_info, frame->raw_name, sizeof(frame->raw_name))) {
+            if(frame->raw_name[0] == '.') {
+                continue;
+            }
+
+            int rel_written = 0;
+            if(rel_prefix && rel_prefix[0] != '\0') {
+                rel_written = snprintf(
+                    frame->rel_entry,
+                    sizeof(frame->rel_entry),
+                    "%s/%s",
+                    rel_prefix,
+                    frame->raw_name);
+            } else {
+                rel_written =
+                    snprintf(frame->rel_entry, sizeof(frame->rel_entry), "%s", frame->raw_name);
+            }
+            if(rel_written <= 0 || (size_t)rel_written >= sizeof(frame->rel_entry)) {
+                continue;
+            }
+
+            int path_written = snprintf(
+                frame->full_path,
+                sizeof(frame->full_path),
+                "%s/%s",
+                dir_path,
+                frame->raw_name);
+            if(path_written <= 0 || (size_t)path_written >= sizeof(frame->full_path)) {
+                continue;
+            }
+
+            if((frame->file_info.flags & FSF_DIRECTORY) != 0) {
+                /* Recurse into nested subfolder inside Series (e.g. Book Tonies, Clever Tonies/GEOlino) */
+                tonie_storage_scan_series_dir_recursive(
+                    storage,
+                    library,
+                    config,
+                    frame->full_path,
+                    frame->rel_entry,
+                    depth + 1);
+            } else if(tonie_storage_has_nfc_extension(frame->raw_name)) {
+                TonieItem* item = &library->items[library->count];
+                memset(item, 0, sizeof(TonieItem));
+                snprintf(item->entry_name, sizeof(item->entry_name), "%s", frame->rel_entry);
+                item->fav_index = 0xFF;
+                item->is_directory = false;
+                item->is_favorite = tonie_storage_is_favorite(config, frame->full_path);
+                library->count++;
+            }
+        }
+    }
+
+    storage_dir_close(dir);
+    storage_file_free(dir);
+    free(frame);
 }
 
 size_t tonie_storage_scan_series_files(
@@ -587,40 +727,7 @@ size_t tonie_storage_scan_series_files(
     snprintf(library->current_dir_path, sizeof(library->current_dir_path), "%s", path_copy);
     snprintf(library->active_series_name, sizeof(library->active_series_name), "%s", name_copy);
 
-    File* dir = storage_file_alloc(storage);
-    if(storage_dir_open(dir, path_copy)) {
-        FileInfo file_info;
-        char entry_name[TONIE_MAX_NAME_LEN];
-
-        while(library->count < TONIE_MAX_ITEMS &&
-              storage_dir_read(dir, &file_info, entry_name, sizeof(entry_name))) {
-            if((file_info.flags & FSF_DIRECTORY) != 0) {
-                continue;
-            }
-            if(!tonie_storage_has_nfc_extension(entry_name)) {
-                continue;
-            }
-
-            char full_path[TONIE_PATH_MAX];
-            int written = snprintf(full_path, sizeof(full_path), "%s/%s", path_copy, entry_name);
-            if(written < 0 || (size_t)written >= sizeof(full_path)) {
-                continue;
-            }
-
-            TonieItem* item = &library->items[library->count];
-            memset(item, 0, sizeof(TonieItem));
-            snprintf(item->entry_name, sizeof(item->entry_name), "%s", entry_name);
-            tonie_storage_format_clean_name(
-                entry_name, item->display_name, sizeof(item->display_name), true);
-            item->fav_index = 0xFF;
-            item->is_directory = false;
-            item->is_favorite = tonie_storage_is_favorite(config, full_path);
-            library->count++;
-        }
-    }
-
-    storage_dir_close(dir);
-    storage_file_free(dir);
+    tonie_storage_scan_series_dir_recursive(storage, library, config, path_copy, "", 0);
 
     tonie_storage_sort_library(library);
     return library->count;

@@ -234,10 +234,13 @@ static void tonie_view_browser_draw_list(Canvas* canvas, const TonieBrowserModel
             icon = tonie_star_icon_7x7;
         }
 
+        char raw_display[TONIE_MAX_NAME_LEN];
+        tonie_storage_get_item_display_name(item, raw_display, sizeof(raw_display));
+
         char fitted_name[TONIE_MAX_NAME_LEN];
         tonie_view_browser_fit_string(
             canvas,
-            item->display_name,
+            raw_display,
             fitted_name,
             sizeof(fitted_name),
             max_title_px,
