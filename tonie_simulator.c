@@ -199,7 +199,9 @@ static void tonie_app_refresh_settings_labels(TonieApp* app) {
     const char* const* bool_names =
         en ? tonie_setting_bool_names_en : tonie_setting_bool_names_de;
 
+#ifdef FW_ORIGIN_Momentum
     variable_item_list_set_header(app->settings_list, en ? "Settings" : "Einstellungen");
+#endif
 
     if(app->setting_item_ui_lang) {
         uint8_t idx = (app->config.ui_lang == TonieUiLangEn) ? 1 : 0;

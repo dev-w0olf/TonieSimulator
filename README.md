@@ -88,8 +88,8 @@ Place `.nfc` files on the Flipper Zero SD card using the directory layout below.
 
 ### Installation
 
-#### Option A: Copy `.fap` to SD Card
-Copy `dist/tonie_simulator.fap` to `/ext/apps/NFC/tonie_simulator.fap` on your Flipper Zero using qFlipper or an SD card reader. The binary must match your installed firmware API version.
+#### Option A: Download Release `.fap`
+Download the `.fap` file matching your installed firmware (`tonie_simulator_momentum.fap`, `tonie_simulator_official.fap`, or `tonie_simulator_unleashed.fap`) from the [Releases](https://github.com/dev-w0olf/TonieSimulator/releases) page and copy it to `/ext/apps/NFC/tonie_simulator.fap` on your Flipper Zero using qFlipper or an SD card reader.
 
 #### Option B: Build and Deploy from Source (`uFBT`)
 
@@ -104,7 +104,7 @@ Copy `dist/tonie_simulator.fap` to `/ext/apps/NFC/tonie_simulator.fap` on your F
      ```
    - **Official Flipper Firmware (Release)**:
      ```bash
-     ufbt update --hw-target f7 --channel=release
+     ufbt update --index-url=https://update.flipperzero.one/firmware/directory.json --hw-target f7 --channel=release
      ```
    - **Unleashed Firmware (Release)**:
      ```bash
@@ -217,8 +217,8 @@ Lege die `.nfc`-Dateien in folgender Verzeichnisstruktur auf der SD-Karte ab. Fe
 
 ### Installation
 
-#### Option A: Fertige `.fap`-Datei kopieren
-Kopiere `dist/tonie_simulator.fap` über qFlipper oder einen SD-Kartenleser nach `/ext/apps/NFC/tonie_simulator.fap`. Die API-Version der `.fap`-Datei muss zur installierten Firmware passen.
+#### Option A: Fertige Release-`.fap` kopieren
+Lade die zur installierten Firmware passende Datei (`tonie_simulator_momentum.fap`, `tonie_simulator_official.fap` oder `tonie_simulator_unleashed.fap`) unter [Releases](https://github.com/dev-w0olf/TonieSimulator/releases) herunter und kopiere sie über qFlipper oder einen SD-Kartenleser nach `/ext/apps/NFC/tonie_simulator.fap`.
 
 #### Option B: Aus dem Quellcode bauen und starten (`uFBT`)
 
@@ -233,7 +233,7 @@ Kopiere `dist/tonie_simulator.fap` über qFlipper oder einen SD-Kartenleser nach
      ```
    - **Offizielle Flipper Firmware (Release)**:
      ```bash
-     ufbt update --hw-target f7 --channel=release
+     ufbt update --index-url=https://update.flipperzero.one/firmware/directory.json --hw-target f7 --channel=release
      ```
    - **Unleashed Firmware (Release)**:
      ```bash
