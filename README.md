@@ -7,9 +7,16 @@ Die App liest `.nfc`-Dumps (ISO/IEC 15693 / NXP ICODE SLIX & SLIX2) von der SD-K
 
 ## Features
 
-- **Animierter Splash-Screen**: Pixel-Art-Startbildschirm mit Löwen-Tonie auf einer isometrischen 3D-Toniebox und animierten NFC-Funkwellen.
-- **2-stufige Serien-Navigation**:
-  - **Ebene 1**: Auswahl der Hörspiel-Serie (unterstützt bis zu **400 Serien** pro Sprache).
+- **Animierter Splash-Screen mit integriertem Hauptmenü**:
+  - Pixel-Art-Startbildschirm mit Löwen-Tonie auf einer isometrischen 3D-Toniebox und animierten NFC-Funkwellen.
+  - Direkt in der unteren schwarzen Leiste wählbares 3-Punkte-Hauptmenü (`< 1. Simulation >`, `< 2. Tonie scannen >`, `< 3. Einstellungen >`).
+- **Tonies per NFC einlesen & speichern (`2. Tonie scannen`)**:
+  - Liest echte Tonie-Figuren (NXP ICODE SLIX / SLIX2 & ISO15693) direkt über die Rückseite des Flipper Zero ein.
+  - Auswahl der Ziel-Sprache (`DE` / `EN`), Auswahl einer **bestehenden Serie** aus der Liste oder **Anlegen einer neuen Serie** per Texteingabe (`[+ Neue Serie anlegen]`) sowie Eingabe des **Tonie-Namens** zum direkten Speichern als `.nfc`-Datei auf der SD-Karte.
+- **In-App Einstellungen (`3. Einstellungen` / `3. Settings`)**:
+  - Konfiguriere **Sprache / Language** (`DE` / `EN`), **Start-Tab / Default Tab** (`DE` / `EN` / `FAV`), **Scroll-Tempo / Scroll Speed** (`Schnell` / `Normal` / `Langsam`), **Vibration** (`Ein` / `Aus`) und **Status-LED** (`Ein` / `Aus`) direkt am Flipper mit sofortiger Live-Umschaltung der gesamten UI und automatischer Speicherung in `tonie_simulator.cfg`.
+- **2-stufige Serien-Navigation (`1. Simulation`)**:
+  - **Ebene 1**: Auswahl der Hörspiel-Serie (unterstützt bis zu **350 Einträge** pro Ansicht inkl. verschachtelter Unterordner).
   - **Ebene 2**: Auswahl der einzelnen `.nfc`-Figuren innerhalb der gewählten Serie.
 - **Interaktive Tabs (`[DE | EN | FAV]`)**: Nahtloser Wechsel per Links-/Rechts-Taste zwischen deutschen Tonies, englischen Tonies und deiner persönlichen Favoritenliste.
 - **Header-Zähler & Marquee-Scrolling**:
@@ -50,15 +57,19 @@ Lege deine `.nfc`-Dumps in folgender Struktur auf der SD-Karte des Flipper Zero 
 
 | Ansicht | Taste | Aktion |
 | :--- | :--- | :--- |
-| **Splash-Screen** | `OK` | App starten -> Serien-Browser öffnen |
-| **Splash-Screen** | `Back` (Kurz) | App beenden |
+| **Splash-Screen (Hauptmenü)** | `Links` / `Rechts` (oder `Hoch`/`Runter`) | Zwischen `1. Simulation`, `2. Tonie scannen` und `3. Einstellungen` wechseln |
+| **Splash-Screen (Hauptmenü)** | `OK` | Gewählten Menüpunkt öffnen |
+| **Splash-Screen (Hauptmenü)** | `Back` (Kurz) | App beenden |
+| **Tonie scannen** | `Links` / `Rechts` | Ziel-Sprache (`DE` / `EN`) umschalten |
+| **Tonie scannen (Erkannt)** | `OK` | Serie auswählen / neu anlegen & Tonie-Namen eingeben |
+| **Tonie scannen (Erkannt)** | `Hoch` / `Runter` | Neuen Scan starten |
 | **Browser (Serien / Dateien)** | `Hoch` / `Runter` | Durch Liste scrollen (mit Wrap-Around) |
 | **Browser (Serien / Dateien)** | `Links` / `Rechts` | Tab wechseln zwischen **`DE`**, **`EN`** und **`FAV`** |
 | **Browser (Serien-Ebene)** | `OK` (Kurz) | Serien-Ordner öffnen |
 | **Browser (Datei-Ebene / FAV)** | `OK` (Kurz) | NFC-Emulation für gewählten Tonie starten |
 | **Browser (Datei-Ebene / FAV)** | `OK` (Gedrückt halten) | Tonie als Favorit (`★`) hinzufügen / entfernen |
 | **Browser (Datei-Ebene)** | `Back` (Kurz) | Zurück zur Serien-Übersicht (merkt sich die Position) |
-| **Browser (Serien-Ebene)** | `Back` (Kurz) | App beenden |
+| **Browser (Serien-Ebene)** | `Back` (Kurz) | Zurück zum Hauptmenü (Splash-Screen) |
 | **Live-Emulation** | `OK` oder `Back` | NFC-Emulation stoppen und zurück zur Liste |
 
 ---
@@ -70,6 +81,8 @@ Die Datei `/ext/nfc/flipper-zero-tonies/tonie_simulator.cfg` kann direkt über d
 ```ini
 Filetype: TonieSimulator Config
 Version: 1
+# UiLanguage: DE or EN
+UiLanguage: DE
 # DefaultTab: German, English, or Favorites
 DefaultTab: German
 # ScrollSpeedMs: Marquee speed in ms (100..1000)

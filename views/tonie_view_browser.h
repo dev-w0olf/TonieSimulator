@@ -47,3 +47,13 @@ void tonie_view_browser_set_scroll_speed(TonieViewBrowser* instance, uint32_t sc
  * @brief Synchronize the browser view model with the current TonieLibrary state.
  */
 void tonie_view_browser_update_library(TonieViewBrowser* instance, const TonieLibrary* library);
+
+/**
+ * @brief Enable or disable Series Picker mode (used when saving a scanned Tonie).
+ */
+void tonie_view_browser_set_picker_mode(TonieViewBrowser* instance, bool picker_mode);
+
+/**
+ * @brief Set the UI display language (DE or EN).
+ */
+void tonie_view_browser_set_ui_lang(TonieViewBrowser* instance, TonieUiLang ui_lang);

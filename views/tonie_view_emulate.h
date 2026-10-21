@@ -62,3 +62,8 @@ void tonie_view_emulate_set_item(
  * @param instance Pointer to TonieViewEmulate instance.
  */
 void tonie_view_emulate_notify_rx(TonieViewEmulate* instance);
+
+/**
+ * @brief Set the UI display language (DE or EN).
+ */
+void tonie_view_emulate_set_ui_lang(TonieViewEmulate* instance, TonieUiLang ui_lang);

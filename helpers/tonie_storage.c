@@ -86,6 +86,7 @@ const char* tonie_storage_get_lang_path(Storage* storage, TonieLang lang) {
 
 static void tonie_storage_config_set_defaults(TonieConfig* config) {
     memset(config, 0, sizeof(TonieConfig));
+    config->ui_lang = TonieUiLangDe;
     config->default_tab = TonieLangGerman;
     config->led_enabled = true;
     config->vibro_enabled = true;
@@ -107,6 +108,12 @@ bool tonie_storage_save_config(Storage* storage, const TonieConfig* config) {
         }
 
         if(!flipper_format_write_header_cstr(ff, TONIE_CONFIG_FILETYPE, TONIE_CONFIG_VERSION)) {
+            break;
+        }
+
+        flipper_format_write_comment_cstr(ff, "UI Language: DE or EN");
+        const char* ui_lang_str = (config->ui_lang == TonieUiLangEn) ? "EN" : "DE";
+        if(!flipper_format_write_string_cstr(ff, "UiLanguage", ui_lang_str)) {
             break;
         }
 
@@ -179,6 +186,15 @@ bool tonie_storage_load_config(Storage* storage, TonieConfig* config) {
 
         if(furi_string_cmp_str(temp_str, TONIE_CONFIG_FILETYPE) != 0) {
             break;
+        }
+
+        if(flipper_format_read_string(ff, "UiLanguage", temp_str)) {
+            if(furi_string_cmpi_str(temp_str, "EN") == 0 ||
+               furi_string_cmpi_str(temp_str, "English") == 0) {
+                config->ui_lang = TonieUiLangEn;
+            } else {
+                config->ui_lang = TonieUiLangDe;
+            }
         }
 
         if(flipper_format_read_string(ff, "DefaultTab", temp_str)) {
@@ -731,4 +747,158 @@ size_t tonie_storage_scan_series_files(
 
     tonie_storage_sort_library(library);
     return library->count;
+}
+
+size_t tonie_storage_scan_series_for_picker(
+    Storage* storage,
+    TonieLibrary* library,
+    TonieLang lang,
+    TonieUiLang ui_lang) {
+    furi_check(storage);
+    furi_check(library);
+
+    if(lang != TonieLangEnglish) {
+        lang = TonieLangGerman;
+    }
+
+    library->count = 0;
+    library->selected_index = 0;
+    library->active_lang = lang;
+    library->level = TonieBrowseLevelSeries;
+    snprintf(
+        library->active_series_name,
+        sizeof(library->active_series_name),
+        "%s",
+        (ui_lang == TonieUiLangEn) ? "Select series" : "Serie waehlen");
+
+    const char* dir_path = tonie_storage_get_lang_path(storage, lang);
+    snprintf(library->current_dir_path, sizeof(library->current_dir_path), "%s", dir_path);
+
+    File* dir = storage_file_alloc(storage);
+    if(storage_dir_open(dir, dir_path)) {
+        FileInfo file_info;
+        char raw_name[256];
+
+        while(library->count + 1 < TONIE_MAX_ITEMS &&
+              storage_dir_read(dir, &file_info, raw_name, sizeof(raw_name))) {
+            if(raw_name[0] == '.') {
+                continue;
+            }
+            size_t raw_len = strlen(raw_name);
+            if(raw_len >= TONIE_MAX_NAME_LEN) {
+                continue;
+            }
+            if((file_info.flags & FSF_DIRECTORY) != 0) {
+                TonieItem* item = &library->items[library->count];
+                memset(item, 0, sizeof(TonieItem));
+                memcpy(item->entry_name, raw_name, raw_len + 1);
+                item->fav_index = 0xFF;
+                item->is_directory = true;
+                item->is_favorite = false;
+                library->count++;
+            }
+        }
+    }
+    storage_dir_close(dir);
+    storage_file_free(dir);
+
+    tonie_storage_sort_library(library);
+
+    /* Shift sorted series down by 1 and insert [+ Neue Serie anlegen] at index 0 */
+    if(library->count < TONIE_MAX_ITEMS) {
+        for(size_t i = library->count; i > 0; i--) {
+            library->items[i] = library->items[i - 1];
+        }
+        TonieItem* first = &library->items[0];
+        memset(first, 0, sizeof(TonieItem));
+        snprintf(
+            first->entry_name,
+            sizeof(first->entry_name),
+            "%s",
+            (ui_lang == TonieUiLangEn) ? "[+ Create new series]" : "[+ Neue Serie anlegen]");
+        first->fav_index = 0xFE;
+        first->is_directory = true;
+        first->is_favorite = false;
+        library->count++;
+    }
+
+    return library->count;
+}
+
+void tonie_storage_sanitize_filename(const char* input, char* out, size_t out_size) {
+    if(!out || out_size == 0) {
+        return;
+    }
+    out[0] = '\0';
+
+    if(!input) {
+        snprintf(out, out_size, "Neuer_Tonie");
+        return;
+    }
+
+    while(*input == ' ' || *input == '.') {
+        input++;
+    }
+
+    size_t j = 0;
+    for(size_t i = 0; input[i] != '\0' && j + 1 < out_size; i++) {
+        char c = input[i];
+        if(c == '/' || c == '\\' || c == ':' || c == '*' || c == '?' || c == '"' || c == '<' ||
+           c == '>' || c == '|') {
+            c = '_';
+        }
+        out[j++] = c;
+    }
+    while(j > 0 && (out[j - 1] == ' ' || out[j - 1] == '.')) {
+        j--;
+    }
+    out[j] = '\0';
+
+    if(out[0] == '\0') {
+        snprintf(out, out_size, "Neuer_Tonie");
+    }
+}
+
+bool tonie_storage_build_new_nfc_path(
+    Storage* storage,
+    TonieLang lang,
+    const char* series_folder_name,
+    const char* tonie_name,
+    char* out_path,
+    size_t out_size) {
+    furi_check(storage);
+    if(!out_path || out_size == 0) {
+        return false;
+    }
+
+    const char* lang_base =
+        (lang == TonieLangEnglish) ? TONIE_ENGLISH_PATH : TONIE_GERMAN_PATH;
+    tonie_storage_ensure_directories(storage);
+
+    char clean_series[TONIE_MAX_SERIES_LEN];
+    tonie_storage_sanitize_filename(series_folder_name, clean_series, sizeof(clean_series));
+
+    char series_dir_path[TONIE_PATH_MAX];
+    int dir_written =
+        snprintf(series_dir_path, sizeof(series_dir_path), "%s/%s", lang_base, clean_series);
+    if(dir_written <= 0 || (size_t)dir_written >= sizeof(series_dir_path)) {
+        return false;
+    }
+
+    if(!tonie_storage_ensure_single_dir(storage, series_dir_path)) {
+        return false;
+    }
+
+    char clean_tonie[TONIE_MAX_NAME_LEN];
+    tonie_storage_sanitize_filename(tonie_name, clean_tonie, sizeof(clean_tonie));
+
+    /* Strip trailing .nfc if user typed it manually */
+    size_t tlen = strlen(clean_tonie);
+    if(tlen > 4 && strcasecmp(clean_tonie + tlen - 4, ".nfc") == 0) {
+        clean_tonie[tlen - 4] = '\0';
+    }
+
+    int file_written =
+        snprintf(out_path, out_size, "%s/%s.nfc", series_dir_path, clean_tonie);
+    return (file_written > 0 && (size_t)file_written < out_size);
 }
