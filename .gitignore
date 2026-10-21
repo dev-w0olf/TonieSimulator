@@ -1,0 +1,14 @@
+# Flipper Zero / uFBT build artifacts
+dist/
+build/
+.ufbt/
+*.fap
+*.elf
+*.o
+*.d
+compile_commands.json
+
+# Editor & OS files
+.vscode/
+.idea/
+.DS_Store

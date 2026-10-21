@@ -1,0 +1,19 @@
+App(
+    appid="tonie_simulator",
+    name="Tonie-Simulator by W0olf",
+    apptype=FlipperAppType.EXTERNAL,
+    entry_point="tonie_simulator_app",
+    sources=[
+        "tonie_simulator.c",
+        "helpers/*.c",
+        "views/*.c",
+    ],
+    stack_size=4 * 1024,
+    fap_category="NFC",
+    fap_version="1.1",
+    fap_icon="images/tonie_icon_10x10.png",
+    fap_description="Toniebox NFC Emulator with Series & Favorites support by W0olf",
+    fap_author="W0olf",
+    fap_weburl="https://github.com/W0olf/tonie-simulator",
+    fap_icon_assets="images",
+)
