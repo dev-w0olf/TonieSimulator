@@ -72,6 +72,7 @@ static const uint8_t tonie_menu_arrow_right_4x7[] = {
 typedef struct {
     uint8_t wave_step;
     TonieMenuAction selected_action;
+    TonieUiLang ui_lang;
 } TonieSplashModel;
 
 struct TonieViewSplash {
@@ -139,9 +140,9 @@ static void tonie_view_splash_draw_callback(Canvas* canvas, void* context) {
 
     const char* menu_label = "1. Simulation";
     if(model->selected_action == TonieMenuActionScan) {
-        menu_label = "2. Tonie scannen";
+        menu_label = (model->ui_lang == TonieUiLangEn) ? "2. Scan Tonie" : "2. Tonie scannen";
     } else if(model->selected_action == TonieMenuActionSettings) {
-        menu_label = "3. Einstellungen";
+        menu_label = (model->ui_lang == TonieUiLangEn) ? "3. Settings" : "3. Einstellungen";
     }
 
     canvas_set_color(canvas, ColorWhite);
@@ -257,6 +258,7 @@ TonieViewSplash* tonie_view_splash_alloc(void) {
         {
             model->wave_step = 3;
             model->selected_action = TonieMenuActionSimulate;
+            model->ui_lang = TonieUiLangDe;
         },
         false);
 
@@ -288,4 +290,13 @@ void tonie_view_splash_set_menu_callback(
     furi_check(instance);
     instance->on_menu_select = on_menu_select;
     instance->callback_context = context;
+}
+
+void tonie_view_splash_set_ui_lang(TonieViewSplash* instance, TonieUiLang ui_lang) {
+    furi_check(instance);
+    with_view_model(
+        instance->view,
+        TonieSplashModel * model,
+        { model->ui_lang = ui_lang; },
+        true);
 }

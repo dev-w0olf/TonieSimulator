@@ -29,6 +29,7 @@ static const uint8_t tonie_scan_head_14x14[] = {
 typedef struct {
     TonieScanState state;
     TonieLang target_lang;
+    TonieUiLang ui_lang;
     uint8_t uid[TONIE_UID_LEN];
     bool is_slix;
     uint8_t anim_step;
@@ -74,7 +75,8 @@ static void tonie_view_scan_draw_header(Canvas* canvas, const TonieScanModel* mo
 
     canvas_set_color(canvas, ColorWhite);
     canvas_set_font(canvas, FontSecondary);
-    canvas_draw_str(canvas, 3, 10, "TONIE SCANNEN");
+    canvas_draw_str(
+        canvas, 3, 10, (model->ui_lang == TonieUiLangEn) ? "SCAN TONIE" : "TONIE SCANNEN");
 
     /* Right side: Language selector [DE | EN] (x: 83..126) */
     const int16_t tab_x[2] = {83, 105};
@@ -106,6 +108,7 @@ static void tonie_view_scan_draw_callback(Canvas* canvas, void* context) {
     canvas_set_color(canvas, ColorBlack);
     canvas_draw_rframe(canvas, 2, 15, 124, 36, 3);
     canvas_draw_xbm(canvas, 8, 25, 14, 14, tonie_scan_head_14x14);
+    bool en = (model->ui_lang == TonieUiLangEn);
 
     if(model->state == TonieScanStateScanning || model->state == TonieScanStateReading) {
         /* Animated RF scan arcs next to Toniehead icon */
@@ -120,25 +123,33 @@ static void tonie_view_scan_draw_callback(Canvas* canvas, void* context) {
         }
 
         canvas_set_font(canvas, FontPrimary);
-        const char* status_title = (model->state == TonieScanStateReading) ?
-                                       "Lese Tonie..." :
-                                       "Suche Tonie...";
+        const char* status_title =
+            (model->state == TonieScanStateReading) ?
+                (en ? "Reading Tonie..." : "Lese Tonie...") :
+                (en ? "Scanning..." : "Suche Tonie...");
         canvas_draw_str(canvas, 36, 27, status_title);
 
         canvas_set_font(canvas, FontSecondary);
-        canvas_draw_str(canvas, 36, 37, "Figur an Flipper");
-        canvas_draw_str(canvas, 36, 46, "Rueckseite halten");
+        canvas_draw_str(canvas, 36, 37, en ? "Hold figure to" : "Figur an Flipper");
+        canvas_draw_str(canvas, 36, 46, en ? "back of Flipper" : "Rueckseite halten");
 
         /* Footer */
         canvas_draw_line(canvas, 0, 52, 127, 52);
         canvas_draw_str_aligned(
-            canvas, 64, 62, AlignCenter, AlignBottom, "[</>] Ziel: DE/EN   [Back]");
+            canvas,
+            64,
+            62,
+            AlignCenter,
+            AlignBottom,
+            en ? "[</>] Lang: DE/EN   [Back]" : "[</>] Ziel: DE/EN   [Back]");
     } else if(model->state == TonieScanStateSuccess) {
         canvas_set_font(canvas, FontPrimary);
-        canvas_draw_str(canvas, 26, 26, "TONIE ERKANNT!");
+        canvas_draw_str(canvas, 26, 26, en ? "TONIE FOUND!" : "TONIE ERKANNT!");
 
         canvas_set_font(canvas, FontSecondary);
-        const char* proto_str = model->is_slix ? "Typ: ICODE SLIX" : "Typ: ISO15693";
+        const char* proto_str = model->is_slix ?
+                                    (en ? "Type: ICODE SLIX" : "Typ: ICODE SLIX") :
+                                    (en ? "Type: ISO15693" : "Typ: ISO15693");
         canvas_draw_str(canvas, 26, 36, proto_str);
 
         char uid_str[32];
@@ -159,10 +170,15 @@ static void tonie_view_scan_draw_callback(Canvas* canvas, void* context) {
         /* Footer */
         canvas_draw_line(canvas, 0, 52, 127, 52);
         canvas_draw_str_aligned(
-            canvas, 64, 62, AlignCenter, AlignBottom, "[OK] Speichern [Up] Neu [</>]");
+            canvas,
+            64,
+            62,
+            AlignCenter,
+            AlignBottom,
+            en ? "[OK] Save  [Up] New  [</>]" : "[OK] Speichern [Up] Neu [</>]");
     } else if(model->state == TonieScanStateSaved) {
         canvas_set_font(canvas, FontPrimary);
-        canvas_draw_str(canvas, 26, 26, "GESPEICHERT!");
+        canvas_draw_str(canvas, 26, 26, en ? "SAVED!" : "GESPEICHERT!");
 
         canvas_set_font(canvas, FontSecondary);
         char fitted_series[TONIE_MAX_SERIES_LEN];
@@ -178,20 +194,30 @@ static void tonie_view_scan_draw_callback(Canvas* canvas, void* context) {
         /* Footer */
         canvas_draw_line(canvas, 0, 52, 127, 52);
         canvas_draw_str_aligned(
-            canvas, 64, 62, AlignCenter, AlignBottom, "[OK] Weiterer Scan  [Back]");
+            canvas,
+            64,
+            62,
+            AlignCenter,
+            AlignBottom,
+            en ? "[OK] Scan next      [Back]" : "[OK] Weiterer Scan  [Back]");
     } else {
         /* Error state */
         canvas_set_font(canvas, FontPrimary);
-        canvas_draw_str(canvas, 26, 27, "Lesefehler!");
+        canvas_draw_str(canvas, 26, 27, en ? "Read error!" : "Lesefehler!");
 
         canvas_set_font(canvas, FontSecondary);
-        canvas_draw_str(canvas, 26, 38, "Tonie ruhig an die");
-        canvas_draw_str(canvas, 26, 47, "Rueckseite halten.");
+        canvas_draw_str(canvas, 26, 38, en ? "Hold Tonie steady" : "Tonie ruhig an die");
+        canvas_draw_str(canvas, 26, 47, en ? "at back of Flipper." : "Rueckseite halten.");
 
         /* Footer */
         canvas_draw_line(canvas, 0, 52, 127, 52);
         canvas_draw_str_aligned(
-            canvas, 64, 62, AlignCenter, AlignBottom, "[OK] Neu scannen    [Back]");
+            canvas,
+            64,
+            62,
+            AlignCenter,
+            AlignBottom,
+            en ? "[OK] Rescan         [Back]" : "[OK] Neu scannen    [Back]");
     }
 }
 
@@ -404,10 +430,12 @@ void tonie_view_scan_set_saved_info(
         TonieScanModel * model,
         {
             model->state = TonieScanStateSaved;
+            bool en = (model->ui_lang == TonieUiLangEn);
             snprintf(
                 model->saved_series,
                 sizeof(model->saved_series),
-                "Serie: %s",
+                "%s: %s",
+                en ? "Series" : "Serie",
                 series_name ? series_name : "");
             snprintf(
                 model->saved_name,
@@ -427,4 +455,14 @@ TonieLang tonie_view_scan_get_target_lang(TonieViewScan* instance) {
         { lang = model->target_lang; },
         false);
     return lang;
+}
+
+void tonie_view_scan_set_ui_lang(TonieViewScan* instance, TonieUiLang ui_lang) {
+    furi_check(instance);
+
+    with_view_model(
+        instance->view,
+        TonieScanModel * model,
+        { model->ui_lang = ui_lang; },
+        true);
 }

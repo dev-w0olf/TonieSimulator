@@ -48,6 +48,7 @@ typedef struct {
     size_t scroll_offset;
     TonieLang active_lang;
     TonieBrowseLevel level;
+    TonieUiLang ui_lang;
     uint16_t marquee_tick;
     bool picker_mode;
 } TonieBrowserModel;
@@ -155,7 +156,9 @@ static void tonie_view_browser_draw_header(Canvas* canvas, const TonieBrowserMod
 
     /* Right side: either Series Picker title or Interactive 3-Tab Selector [DE | EN | FAV] */
     if(model->picker_mode) {
-        canvas_draw_str_aligned(canvas, 125, 10, AlignRight, AlignBottom, "SERIE WAEHLEN");
+        const char* picker_title =
+            (model->ui_lang == TonieUiLangEn) ? "SELECT SERIES" : "SERIE WAEHLEN";
+        canvas_draw_str_aligned(canvas, 125, 10, AlignRight, AlignBottom, picker_title);
         return;
     }
 
@@ -186,25 +189,52 @@ static void tonie_view_browser_draw_empty(Canvas* canvas, const TonieBrowserMode
     canvas_set_color(canvas, ColorBlack);
     canvas_draw_rframe(canvas, 3, 15, 122, 35, 3);
     canvas_set_font(canvas, FontSecondary);
+    bool en = (model->ui_lang == TonieUiLangEn);
 
     if(model->active_lang == TonieLangFavorites) {
-        canvas_draw_str_aligned(canvas, 64, 26, AlignCenter, AlignBottom, "Keine Favoriten!");
         canvas_draw_str_aligned(
-            canvas, 64, 36, AlignCenter, AlignBottom, "In einer Serie [OK] gedrueckt");
+            canvas, 64, 26, AlignCenter, AlignBottom, en ? "No favorites yet!" : "Keine Favoriten!");
         canvas_draw_str_aligned(
-            canvas, 64, 46, AlignCenter, AlignBottom, "halten fuer Favorit (*)");
+            canvas,
+            64,
+            36,
+            AlignCenter,
+            AlignBottom,
+            en ? "Hold [OK] on a Tonie inside" : "In einer Serie [OK] gedrueckt");
+        canvas_draw_str_aligned(
+            canvas,
+            64,
+            46,
+            AlignCenter,
+            AlignBottom,
+            en ? "a series for favorite (*)" : "halten fuer Favorit (*)");
     } else if(model->level == TonieBrowseLevelSeries) {
         canvas_draw_str_aligned(
-            canvas, 64, 26, AlignCenter, AlignBottom, "Keine Serien-Ordner in:");
+            canvas,
+            64,
+            26,
+            AlignCenter,
+            AlignBottom,
+            en ? "No series folders in:" : "Keine Serien-Ordner in:");
         const char* hint = (model->active_lang == TonieLangGerman) ?
                                ".../tonies/German/{Serie}" :
                                ".../tonies/English/{Serie}";
         canvas_draw_str_aligned(canvas, 64, 36, AlignCenter, AlignBottom, hint);
         canvas_draw_str_aligned(
-            canvas, 64, 46, AlignCenter, AlignBottom, "[< / >] Tab wechseln");
+            canvas,
+            64,
+            46,
+            AlignCenter,
+            AlignBottom,
+            en ? "[< / >] Switch tab" : "[< / >] Tab wechseln");
     } else {
         canvas_draw_str_aligned(
-            canvas, 64, 28, AlignCenter, AlignBottom, "Keine .nfc Dateien in Serie:");
+            canvas,
+            64,
+            28,
+            AlignCenter,
+            AlignBottom,
+            en ? "No .nfc files in series:" : "Keine .nfc Dateien in Serie:");
         const char* series_str =
             model->library ? model->library->active_series_name : "";
         canvas_draw_str_aligned(canvas, 64, 40, AlignCenter, AlignBottom, series_str);
@@ -287,10 +317,16 @@ static void tonie_view_browser_draw_footer(Canvas* canvas, const TonieBrowserMod
     canvas_set_color(canvas, ColorBlack);
     canvas_draw_line(canvas, 0, 52, 127, 52);
     canvas_set_font(canvas, FontSecondary);
+    bool en = (model->ui_lang == TonieUiLangEn);
 
     if(model->picker_mode) {
         canvas_draw_str_aligned(
-            canvas, 64, 62, AlignCenter, AlignBottom, "[OK] Serie waehlen  [Back]");
+            canvas,
+            64,
+            62,
+            AlignCenter,
+            AlignBottom,
+            en ? "[OK] Select series  [Back]" : "[OK] Serie waehlen  [Back]");
         return;
     }
 
@@ -301,7 +337,12 @@ static void tonie_view_browser_draw_footer(Canvas* canvas, const TonieBrowserMod
 
     if(model->level == TonieBrowseLevelSeries && selected_is_dir) {
         canvas_draw_str_aligned(
-            canvas, 64, 62, AlignCenter, AlignBottom, "[OK] Serie  [</>] Tab  [Back]");
+            canvas,
+            64,
+            62,
+            AlignCenter,
+            AlignBottom,
+            en ? "[OK] Series  [</>] Tab  [Back]" : "[OK] Serie  [</>] Tab  [Back]");
     } else {
         canvas_draw_str_aligned(
             canvas, 64, 62, AlignCenter, AlignBottom, "[OK] Emul  [Hold OK] Fav  [Back]");
@@ -589,5 +630,15 @@ void tonie_view_browser_set_picker_mode(TonieViewBrowser* instance, bool picker_
         instance->view,
         TonieBrowserModel * model,
         { model->picker_mode = picker_mode; },
+        true);
+}
+
+void tonie_view_browser_set_ui_lang(TonieViewBrowser* instance, TonieUiLang ui_lang) {
+    furi_check(instance);
+
+    with_view_model(
+        instance->view,
+        TonieBrowserModel * model,
+        { model->ui_lang = ui_lang; },
         true);
 }

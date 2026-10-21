@@ -4,10 +4,21 @@
 #include <stdio.h>
 #include <string.h>
 
+static const char* const tonie_setting_ui_lang_names[] = {"DE", "EN"};
 static const char* const tonie_setting_tab_names[] = {"DE", "EN", "FAV"};
-static const char* const tonie_setting_speed_names[] = {"Schnell", "Normal", "Langsam"};
+static const char* const tonie_setting_speed_names_de[] = {"Schnell", "Normal", "Langsam"};
+static const char* const tonie_setting_speed_names_en[] = {"Fast", "Normal", "Slow"};
 static const uint32_t tonie_setting_speed_values[] = {150, 250, 400};
-static const char* const tonie_setting_bool_names[] = {"Aus", "Ein"};
+static const char* const tonie_setting_bool_names_de[] = {"Aus", "Ein"};
+static const char* const tonie_setting_bool_names_en[] = {"Off", "On"};
+
+static void tonie_app_apply_ui_lang(TonieApp* app) {
+    furi_check(app);
+    tonie_view_splash_set_ui_lang(app->view_splash, app->config.ui_lang);
+    tonie_view_browser_set_ui_lang(app->view_browser, app->config.ui_lang);
+    tonie_view_emulate_set_ui_lang(app->view_emulate, app->config.ui_lang);
+    tonie_view_scan_set_ui_lang(app->view_scan, app->config.ui_lang);
+}
 
 static void tonie_app_short_vibro(const TonieApp* app) {
     if(app && app->config.vibro_enabled) {
@@ -180,6 +191,70 @@ static void tonie_app_on_text_input_done(void* context) {
 }
 
 /* --- Settings Callbacks --- */
+static void tonie_app_refresh_settings_labels(TonieApp* app) {
+    furi_check(app);
+    bool en = (app->config.ui_lang == TonieUiLangEn);
+    const char* const* speed_names =
+        en ? tonie_setting_speed_names_en : tonie_setting_speed_names_de;
+    const char* const* bool_names =
+        en ? tonie_setting_bool_names_en : tonie_setting_bool_names_de;
+
+    variable_item_list_set_header(app->settings_list, en ? "Settings" : "Einstellungen");
+
+    if(app->setting_item_ui_lang) {
+        uint8_t idx = (app->config.ui_lang == TonieUiLangEn) ? 1 : 0;
+        variable_item_set_item_label(app->setting_item_ui_lang, en ? "Language" : "Sprache");
+        variable_item_set_current_value_index(app->setting_item_ui_lang, idx);
+        variable_item_set_current_value_text(
+            app->setting_item_ui_lang, tonie_setting_ui_lang_names[idx]);
+    }
+
+    if(app->setting_item_tab) {
+        uint8_t idx = (uint8_t)app->config.default_tab;
+        if(idx >= 3) idx = 0;
+        variable_item_set_item_label(app->setting_item_tab, en ? "Default Tab" : "Start-Tab");
+        variable_item_set_current_value_index(app->setting_item_tab, idx);
+        variable_item_set_current_value_text(app->setting_item_tab, tonie_setting_tab_names[idx]);
+    }
+
+    if(app->setting_item_speed) {
+        uint8_t idx = 1;
+        if(app->config.scroll_speed_ms <= 180) {
+            idx = 0;
+        } else if(app->config.scroll_speed_ms >= 320) {
+            idx = 2;
+        }
+        variable_item_set_item_label(app->setting_item_speed, en ? "Scroll Speed" : "Scroll-Tempo");
+        variable_item_set_current_value_index(app->setting_item_speed, idx);
+        variable_item_set_current_value_text(app->setting_item_speed, speed_names[idx]);
+    }
+
+    if(app->setting_item_vibro) {
+        uint8_t idx = app->config.vibro_enabled ? 1 : 0;
+        variable_item_set_item_label(app->setting_item_vibro, "Vibration");
+        variable_item_set_current_value_index(app->setting_item_vibro, idx);
+        variable_item_set_current_value_text(app->setting_item_vibro, bool_names[idx]);
+    }
+
+    if(app->setting_item_led) {
+        uint8_t idx = app->config.led_enabled ? 1 : 0;
+        variable_item_set_item_label(app->setting_item_led, "Status-LED");
+        variable_item_set_current_value_index(app->setting_item_led, idx);
+        variable_item_set_current_value_text(app->setting_item_led, bool_names[idx]);
+    }
+}
+
+static void tonie_app_setting_ui_lang_changed(VariableItem* item) {
+    TonieApp* app = variable_item_get_context(item);
+    furi_check(app);
+
+    uint8_t idx = variable_item_get_current_value_index(item);
+    app->config.ui_lang = (idx == 1) ? TonieUiLangEn : TonieUiLangDe;
+    tonie_app_apply_ui_lang(app);
+    tonie_app_refresh_settings_labels(app);
+    tonie_storage_save_config(app->storage, &app->config);
+}
+
 static void tonie_app_setting_tab_changed(VariableItem* item) {
     TonieApp* app = variable_item_get_context(item);
     furi_check(app);
@@ -201,7 +276,10 @@ static void tonie_app_setting_speed_changed(VariableItem* item) {
     if(idx >= 3) {
         idx = 1;
     }
-    variable_item_set_current_value_text(item, tonie_setting_speed_names[idx]);
+    const char* const* speed_names = (app->config.ui_lang == TonieUiLangEn) ?
+                                         tonie_setting_speed_names_en :
+                                         tonie_setting_speed_names_de;
+    variable_item_set_current_value_text(item, speed_names[idx]);
     app->config.scroll_speed_ms = tonie_setting_speed_values[idx];
     tonie_view_browser_set_scroll_speed(app->view_browser, app->config.scroll_speed_ms);
     tonie_storage_save_config(app->storage, &app->config);
@@ -213,7 +291,10 @@ static void tonie_app_setting_vibro_changed(VariableItem* item) {
 
     uint8_t idx = variable_item_get_current_value_index(item);
     bool enabled = (idx != 0);
-    variable_item_set_current_value_text(item, tonie_setting_bool_names[enabled ? 1 : 0]);
+    const char* const* bool_names = (app->config.ui_lang == TonieUiLangEn) ?
+                                        tonie_setting_bool_names_en :
+                                        tonie_setting_bool_names_de;
+    variable_item_set_current_value_text(item, bool_names[enabled ? 1 : 0]);
     app->config.vibro_enabled = enabled;
     tonie_emulator_set_feedback(app->emulator, app->config.led_enabled, app->config.vibro_enabled);
     tonie_storage_save_config(app->storage, &app->config);
@@ -228,7 +309,10 @@ static void tonie_app_setting_led_changed(VariableItem* item) {
 
     uint8_t idx = variable_item_get_current_value_index(item);
     bool enabled = (idx != 0);
-    variable_item_set_current_value_text(item, tonie_setting_bool_names[enabled ? 1 : 0]);
+    const char* const* bool_names = (app->config.ui_lang == TonieUiLangEn) ?
+                                        tonie_setting_bool_names_en :
+                                        tonie_setting_bool_names_de;
+    variable_item_set_current_value_text(item, bool_names[enabled ? 1 : 0]);
     app->config.led_enabled = enabled;
     tonie_emulator_set_feedback(app->emulator, app->config.led_enabled, app->config.vibro_enabled);
     tonie_storage_save_config(app->storage, &app->config);
@@ -236,57 +320,49 @@ static void tonie_app_setting_led_changed(VariableItem* item) {
 
 static void tonie_app_setup_settings_list(TonieApp* app) {
     variable_item_list_reset(app->settings_list);
-    variable_item_list_set_header(app->settings_list, "Einstellungen");
+    bool en = (app->config.ui_lang == TonieUiLangEn);
 
-    /* 1. Start-Tab */
-    VariableItem* item_tab = variable_item_list_add(
+    /* 1. Sprache / Language (DE / EN) */
+    app->setting_item_ui_lang = variable_item_list_add(
         app->settings_list,
-        "Start-Tab",
+        en ? "Language" : "Sprache",
+        2,
+        tonie_app_setting_ui_lang_changed,
+        app);
+
+    /* 2. Start-Tab / Default Tab */
+    app->setting_item_tab = variable_item_list_add(
+        app->settings_list,
+        en ? "Default Tab" : "Start-Tab",
         3,
         tonie_app_setting_tab_changed,
         app);
-    uint8_t tab_idx = (uint8_t)app->config.default_tab;
-    if(tab_idx >= 3) tab_idx = 0;
-    variable_item_set_current_value_index(item_tab, tab_idx);
-    variable_item_set_current_value_text(item_tab, tonie_setting_tab_names[tab_idx]);
 
-    /* 2. Scroll-Tempo */
-    VariableItem* item_speed = variable_item_list_add(
+    /* 3. Scroll-Tempo / Scroll Speed */
+    app->setting_item_speed = variable_item_list_add(
         app->settings_list,
-        "Scroll-Tempo",
+        en ? "Scroll Speed" : "Scroll-Tempo",
         3,
         tonie_app_setting_speed_changed,
         app);
-    uint8_t speed_idx = 1;
-    if(app->config.scroll_speed_ms <= 180) {
-        speed_idx = 0;
-    } else if(app->config.scroll_speed_ms >= 320) {
-        speed_idx = 2;
-    }
-    variable_item_set_current_value_index(item_speed, speed_idx);
-    variable_item_set_current_value_text(item_speed, tonie_setting_speed_names[speed_idx]);
 
-    /* 3. Vibration */
-    VariableItem* item_vibro = variable_item_list_add(
+    /* 4. Vibration */
+    app->setting_item_vibro = variable_item_list_add(
         app->settings_list,
         "Vibration",
         2,
         tonie_app_setting_vibro_changed,
         app);
-    uint8_t vibro_idx = app->config.vibro_enabled ? 1 : 0;
-    variable_item_set_current_value_index(item_vibro, vibro_idx);
-    variable_item_set_current_value_text(item_vibro, tonie_setting_bool_names[vibro_idx]);
 
-    /* 4. Status-LED */
-    VariableItem* item_led = variable_item_list_add(
+    /* 5. Status-LED */
+    app->setting_item_led = variable_item_list_add(
         app->settings_list,
         "Status-LED",
         2,
         tonie_app_setting_led_changed,
         app);
-    uint8_t led_idx = app->config.led_enabled ? 1 : 0;
-    variable_item_set_current_value_index(item_led, led_idx);
-    variable_item_set_current_value_text(item_led, tonie_setting_bool_names[led_idx]);
+
+    tonie_app_refresh_settings_labels(app);
 }
 
 static void tonie_app_prompt_text_input(
@@ -392,7 +468,7 @@ static bool tonie_app_custom_event_callback(void* context, uint32_t event) {
 
     case TonieCustomEventScanSaveStart:
         tonie_storage_scan_series_for_picker(
-            app->storage, &app->library, app->scan_target_lang);
+            app->storage, &app->library, app->scan_target_lang, app->config.ui_lang);
         app->browser_is_series_picker = true;
         tonie_view_browser_set_picker_mode(app->view_browser, true);
         tonie_view_browser_update_library(app->view_browser, &app->library);
@@ -405,24 +481,33 @@ static bool tonie_app_custom_event_callback(void* context, uint32_t event) {
         view_dispatcher_switch_to_view(app->view_dispatcher, TonieViewIdScan);
         return true;
 
-    case TonieCustomEventTextInputDone:
+    case TonieCustomEventTextInputDone: {
+        bool en = (app->config.ui_lang == TonieUiLangEn);
         if(app->text_input_for_series) {
             /* User entered a new Series name; now ask for the Tonie name */
             if(app->scan_series_name[0] == '\0') {
-                snprintf(app->scan_series_name, sizeof(app->scan_series_name), "Meine Serie");
+                snprintf(
+                    app->scan_series_name,
+                    sizeof(app->scan_series_name),
+                    "%s",
+                    en ? "My Series" : "Meine Serie");
             }
             app->text_input_for_series = false;
             snprintf(
                 app->scan_tonie_name, sizeof(app->scan_tonie_name), "%s", app->scan_series_name);
             tonie_app_prompt_text_input(
                 app,
-                "Tonie-Name eingeben:",
+                en ? "Enter Tonie name:" : "Tonie-Name eingeben:",
                 app->scan_tonie_name,
                 sizeof(app->scan_tonie_name));
         } else {
             /* Both Series and Tonie name are set -> save .nfc file to SD card */
             if(app->scan_tonie_name[0] == '\0') {
-                snprintf(app->scan_tonie_name, sizeof(app->scan_tonie_name), "Neuer Tonie");
+                snprintf(
+                    app->scan_tonie_name,
+                    sizeof(app->scan_tonie_name),
+                    "%s",
+                    en ? "New Tonie" : "Neuer Tonie");
             }
             char new_nfc_path[TONIE_PATH_MAX];
             bool ok = false;
@@ -449,6 +534,7 @@ static bool tonie_app_custom_event_callback(void* context, uint32_t event) {
             view_dispatcher_switch_to_view(app->view_dispatcher, TonieViewIdScan);
         }
         return true;
+    }
 
     case TonieCustomEventLangGerman:
         tonie_storage_scan_series(
@@ -521,13 +607,18 @@ static bool tonie_app_custom_event_callback(void* context, uint32_t event) {
 
         /* Handle selection when Browser is in Series-Picker mode for saving a scanned Tonie */
         if(app->browser_is_series_picker) {
+            bool en = (app->config.ui_lang == TonieUiLangEn);
             if(app->library.selected_index == 0 && item->fav_index == 0xFE) {
-                /* [+ Neue Serie anlegen] selected */
+                /* [+ Neue Serie anlegen] / [+ Create new series] selected */
                 app->text_input_for_series = true;
-                snprintf(app->scan_series_name, sizeof(app->scan_series_name), "Neue Serie");
+                snprintf(
+                    app->scan_series_name,
+                    sizeof(app->scan_series_name),
+                    "%s",
+                    en ? "New Series" : "Neue Serie");
                 tonie_app_prompt_text_input(
                     app,
-                    "Neue Serie eingeben:",
+                    en ? "Enter new series:" : "Neue Serie eingeben:",
                     app->scan_series_name,
                     sizeof(app->scan_series_name));
             } else {
@@ -542,7 +633,7 @@ static bool tonie_app_custom_event_callback(void* context, uint32_t event) {
                     item, app->scan_tonie_name, sizeof(app->scan_tonie_name));
                 tonie_app_prompt_text_input(
                     app,
-                    "Tonie-Name eingeben:",
+                    en ? "Enter Tonie name:" : "Tonie-Name eingeben:",
                     app->scan_tonie_name,
                     sizeof(app->scan_tonie_name));
             }
@@ -718,6 +809,7 @@ int32_t tonie_simulator_app(void* p) {
 
     /* 2. Config & Favoriten laden (erstellt tonie_simulator.cfg falls noch nicht vorhanden) */
     tonie_storage_load_config(app->storage, &app->config);
+    tonie_app_apply_ui_lang(app);
     tonie_view_browser_set_scroll_speed(app->view_browser, app->config.scroll_speed_ms);
     tonie_emulator_set_feedback(
         app->emulator, app->config.led_enabled, app->config.vibro_enabled);

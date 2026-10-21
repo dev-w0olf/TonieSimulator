@@ -40,6 +40,7 @@ typedef struct {
     char series_name[TONIE_MAX_SERIES_LEN];
     uint8_t uid[TONIE_UID_LEN];
     TonieLang lang;
+    TonieUiLang ui_lang;
     bool is_slix;
     bool is_favorite;
     bool emulation_running;
@@ -191,9 +192,10 @@ static void tonie_view_emulate_draw_callback(Canvas* canvas, void* context) {
     }
 
     char line_series[TONIE_MAX_SERIES_LEN + 24];
+    bool en = (model->ui_lang == TonieUiLangEn);
     tonie_view_emulate_marquee_str(
         canvas,
-        "Serie: ",
+        en ? "Series: " : "Serie: ",
         series_raw,
         line_series,
         sizeof(line_series),
@@ -228,7 +230,12 @@ static void tonie_view_emulate_draw_callback(Canvas* canvas, void* context) {
     canvas_draw_rbox(canvas, 2, 54, 124, 10, 2);
     canvas_set_color(canvas, ColorWhite);
     canvas_draw_str_aligned(
-        canvas, 64, 62, AlignCenter, AlignBottom, "[OK/Back] Emulation stoppen");
+        canvas,
+        64,
+        62,
+        AlignCenter,
+        AlignBottom,
+        en ? "[OK/Back] Stop emulation" : "[OK/Back] Emulation stoppen");
 }
 
 static bool tonie_view_emulate_input_callback(InputEvent* event, void* context) {
@@ -342,5 +349,15 @@ void tonie_view_emulate_notify_rx(TonieViewEmulate* instance) {
             model->rx_count++;
             model->anim_step = (model->anim_step + 1) & 0x03;
         },
+        true);
+}
+
+void tonie_view_emulate_set_ui_lang(TonieViewEmulate* instance, TonieUiLang ui_lang) {
+    furi_check(instance);
+
+    with_view_model(
+        instance->view,
+        TonieEmulateModel * model,
+        { model->ui_lang = ui_lang; },
         true);
 }

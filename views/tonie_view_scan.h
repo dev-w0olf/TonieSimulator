@@ -71,3 +71,8 @@ void tonie_view_scan_set_saved_info(
  * @brief Get the currently selected target language (German or English).
  */
 TonieLang tonie_view_scan_get_target_lang(TonieViewScan* instance);
+
+/**
+ * @brief Set the UI display language (DE or EN).
+ */
+void tonie_view_scan_set_ui_lang(TonieViewScan* instance, TonieUiLang ui_lang);

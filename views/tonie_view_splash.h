@@ -2,6 +2,7 @@
 
 #include <furi.h>
 #include <gui/view.h>
+#include "../helpers/tonie_storage.h"
 
 typedef struct TonieViewSplash TonieViewSplash;
 
@@ -36,3 +37,8 @@ void tonie_view_splash_set_menu_callback(
     TonieViewSplash* instance,
     TonieViewSplashMenuCallback on_menu_select,
     void* context);
+
+/**
+ * @brief Set the UI language (DE or EN) for the splash screen menu bar.
+ */
+void tonie_view_splash_set_ui_lang(TonieViewSplash* instance, TonieUiLang ui_lang);

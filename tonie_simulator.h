@@ -63,6 +63,11 @@ typedef struct {
     TonieViewScan* view_scan;
     TextInput* text_input;
     VariableItemList* settings_list;
+    VariableItem* setting_item_ui_lang;
+    VariableItem* setting_item_tab;
+    VariableItem* setting_item_speed;
+    VariableItem* setting_item_vibro;
+    VariableItem* setting_item_led;
 
     /* State for NFC Scan & Save workflow */
     bool browser_is_series_picker;

@@ -13,8 +13,8 @@ Die App liest `.nfc`-Dumps (ISO/IEC 15693 / NXP ICODE SLIX & SLIX2) von der SD-K
 - **Tonies per NFC einlesen & speichern (`2. Tonie scannen`)**:
   - Liest echte Tonie-Figuren (NXP ICODE SLIX / SLIX2 & ISO15693) direkt über die Rückseite des Flipper Zero ein.
   - Auswahl der Ziel-Sprache (`DE` / `EN`), Auswahl einer **bestehenden Serie** aus der Liste oder **Anlegen einer neuen Serie** per Texteingabe (`[+ Neue Serie anlegen]`) sowie Eingabe des **Tonie-Namens** zum direkten Speichern als `.nfc`-Datei auf der SD-Karte.
-- **In-App Einstellungen (`3. Einstellungen`)**:
-  - Konfiguriere **Start-Tab** (`DE` / `EN` / `FAV`), **Scroll-Tempo** (`Schnell` / `Normal` / `Langsam`), **Vibration** (`Ein` / `Aus`) und **Status-LED** (`Ein` / `Aus`) direkt am Flipper mit automatischer Speicherung in `tonie_simulator.cfg`.
+- **In-App Einstellungen (`3. Einstellungen` / `3. Settings`)**:
+  - Konfiguriere **Sprache / Language** (`DE` / `EN`), **Start-Tab / Default Tab** (`DE` / `EN` / `FAV`), **Scroll-Tempo / Scroll Speed** (`Schnell` / `Normal` / `Langsam`), **Vibration** (`Ein` / `Aus`) und **Status-LED** (`Ein` / `Aus`) direkt am Flipper mit sofortiger Live-Umschaltung der gesamten UI und automatischer Speicherung in `tonie_simulator.cfg`.
 - **2-stufige Serien-Navigation (`1. Simulation`)**:
   - **Ebene 1**: Auswahl der Hörspiel-Serie (unterstützt bis zu **350 Einträge** pro Ansicht inkl. verschachtelter Unterordner).
   - **Ebene 2**: Auswahl der einzelnen `.nfc`-Figuren innerhalb der gewählten Serie.
@@ -81,6 +81,8 @@ Die Datei `/ext/nfc/flipper-zero-tonies/tonie_simulator.cfg` kann direkt über d
 ```ini
 Filetype: TonieSimulator Config
 Version: 1
+# UiLanguage: DE or EN
+UiLanguage: DE
 # DefaultTab: German, English, or Favorites
 DefaultTab: German
 # ScrollSpeedMs: Marquee speed in ms (100..1000)

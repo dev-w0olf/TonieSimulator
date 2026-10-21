@@ -86,6 +86,7 @@ const char* tonie_storage_get_lang_path(Storage* storage, TonieLang lang) {
 
 static void tonie_storage_config_set_defaults(TonieConfig* config) {
     memset(config, 0, sizeof(TonieConfig));
+    config->ui_lang = TonieUiLangDe;
     config->default_tab = TonieLangGerman;
     config->led_enabled = true;
     config->vibro_enabled = true;
@@ -107,6 +108,12 @@ bool tonie_storage_save_config(Storage* storage, const TonieConfig* config) {
         }
 
         if(!flipper_format_write_header_cstr(ff, TONIE_CONFIG_FILETYPE, TONIE_CONFIG_VERSION)) {
+            break;
+        }
+
+        flipper_format_write_comment_cstr(ff, "UI Language: DE or EN");
+        const char* ui_lang_str = (config->ui_lang == TonieUiLangEn) ? "EN" : "DE";
+        if(!flipper_format_write_string_cstr(ff, "UiLanguage", ui_lang_str)) {
             break;
         }
 
@@ -179,6 +186,15 @@ bool tonie_storage_load_config(Storage* storage, TonieConfig* config) {
 
         if(furi_string_cmp_str(temp_str, TONIE_CONFIG_FILETYPE) != 0) {
             break;
+        }
+
+        if(flipper_format_read_string(ff, "UiLanguage", temp_str)) {
+            if(furi_string_cmpi_str(temp_str, "EN") == 0 ||
+               furi_string_cmpi_str(temp_str, "English") == 0) {
+                config->ui_lang = TonieUiLangEn;
+            } else {
+                config->ui_lang = TonieUiLangDe;
+            }
         }
 
         if(flipper_format_read_string(ff, "DefaultTab", temp_str)) {
@@ -736,7 +752,8 @@ size_t tonie_storage_scan_series_files(
 size_t tonie_storage_scan_series_for_picker(
     Storage* storage,
     TonieLibrary* library,
-    TonieLang lang) {
+    TonieLang lang,
+    TonieUiLang ui_lang) {
     furi_check(storage);
     furi_check(library);
 
@@ -748,7 +765,11 @@ size_t tonie_storage_scan_series_for_picker(
     library->selected_index = 0;
     library->active_lang = lang;
     library->level = TonieBrowseLevelSeries;
-    snprintf(library->active_series_name, sizeof(library->active_series_name), "Serie waehlen");
+    snprintf(
+        library->active_series_name,
+        sizeof(library->active_series_name),
+        "%s",
+        (ui_lang == TonieUiLangEn) ? "Select series" : "Serie waehlen");
 
     const char* dir_path = tonie_storage_get_lang_path(storage, lang);
     snprintf(library->current_dir_path, sizeof(library->current_dir_path), "%s", dir_path);
@@ -791,7 +812,10 @@ size_t tonie_storage_scan_series_for_picker(
         TonieItem* first = &library->items[0];
         memset(first, 0, sizeof(TonieItem));
         snprintf(
-            first->entry_name, sizeof(first->entry_name), "[+ Neue Serie anlegen]");
+            first->entry_name,
+            sizeof(first->entry_name),
+            "%s",
+            (ui_lang == TonieUiLangEn) ? "[+ Create new series]" : "[+ Neue Serie anlegen]");
         first->fav_index = 0xFE;
         first->is_directory = true;
         first->is_favorite = false;
