@@ -384,6 +384,59 @@ static void tonie_app_prompt_text_input(
     view_dispatcher_switch_to_view(app->view_dispatcher, TonieViewIdTextInput);
 }
 
+static void tonie_app_save_scanned_tonie(TonieApp* app) {
+    furi_check(app);
+    bool en = (app->config.ui_lang == TonieUiLangEn);
+
+    if(app->scan_series_name[0] == '\0') {
+        snprintf(
+            app->scan_series_name,
+            sizeof(app->scan_series_name),
+            "%s",
+            en ? "My Series" : "Meine Serie");
+    }
+    if(app->scan_tonie_name[0] == '\0') {
+        snprintf(
+            app->scan_tonie_name,
+            sizeof(app->scan_tonie_name),
+            "%s",
+            en ? "New Tonie" : "Neuer Tonie");
+    }
+
+    char new_nfc_path[TONIE_PATH_MAX];
+    bool ok = false;
+    if(tonie_storage_build_new_nfc_path(
+           app->storage,
+           app->scan_target_lang,
+           app->scan_series_name,
+           app->scan_tonie_name,
+           new_nfc_path,
+           sizeof(new_nfc_path))) {
+        ok = tonie_emulator_save_scanned(app->emulator, new_nfc_path);
+    }
+
+    app->browser_is_series_picker = false;
+    tonie_view_browser_set_picker_mode(app->view_browser, false);
+
+    if(ok) {
+        uint8_t uid[TONIE_UID_LEN] = {0};
+        if(tonie_emulator_get_scanned_info(app->emulator, uid, sizeof(uid), NULL)) {
+            tonie_storage_register_uid(
+                app->storage,
+                uid,
+                app->scan_target_lang,
+                app->scan_series_name,
+                app->scan_tonie_name);
+        }
+        tonie_view_scan_set_saved_info(
+            app->view_scan, app->scan_series_name, app->scan_tonie_name);
+    } else {
+        tonie_view_scan_set_state(
+            app->view_scan, TonieScanStateError, app->scan_target_lang);
+    }
+    view_dispatcher_switch_to_view(app->view_dispatcher, TonieViewIdScan);
+}
+
 static bool tonie_app_custom_event_callback(void* context, uint32_t event) {
     TonieApp* app = context;
     furi_check(app);
@@ -440,7 +493,25 @@ static bool tonie_app_custom_event_callback(void* context, uint32_t event) {
         uint8_t uid[TONIE_UID_LEN] = {0};
         bool is_slix = true;
         tonie_emulator_get_scanned_info(app->emulator, uid, sizeof(uid), &is_slix);
-        tonie_view_scan_set_tag_info(app->view_scan, uid, is_slix);
+
+        TonieLang matched_lang = app->scan_target_lang;
+        if(tonie_storage_find_by_uid(
+               app->storage,
+               uid,
+               &matched_lang,
+               app->scan_series_name,
+               sizeof(app->scan_series_name),
+               app->scan_tonie_name,
+               sizeof(app->scan_tonie_name))) {
+            app->scan_target_lang = matched_lang;
+            tonie_view_scan_set_state(app->view_scan, TonieScanStateSuccess, matched_lang);
+            tonie_view_scan_set_tag_info(
+                app->view_scan, uid, is_slix, app->scan_series_name, app->scan_tonie_name);
+        } else {
+            app->scan_series_name[0] = '\0';
+            app->scan_tonie_name[0] = '\0';
+            tonie_view_scan_set_tag_info(app->view_scan, uid, is_slix, NULL, NULL);
+        }
         return true;
     }
 
@@ -454,6 +525,8 @@ static bool tonie_app_custom_event_callback(void* context, uint32_t event) {
 
     case TonieCustomEventScanRestart: {
         TonieLang cur_lang = tonie_view_scan_get_target_lang(app->view_scan);
+        app->scan_series_name[0] = '\0';
+        app->scan_tonie_name[0] = '\0';
         tonie_view_scan_set_state(app->view_scan, TonieScanStateScanning, cur_lang);
         tonie_emulator_start_scan(
             app->emulator,
@@ -471,6 +544,14 @@ static bool tonie_app_custom_event_callback(void* context, uint32_t event) {
     case TonieCustomEventScanSaveStart:
         tonie_storage_scan_series_for_picker(
             app->storage, &app->library, app->scan_target_lang, app->config.ui_lang);
+        if(app->scan_series_name[0] != '\0') {
+            for(size_t i = 1; i < app->library.count; i++) {
+                if(strcasecmp(app->library.items[i].entry_name, app->scan_series_name) == 0) {
+                    app->library.selected_index = i;
+                    break;
+                }
+            }
+        }
         app->browser_is_series_picker = true;
         tonie_view_browser_set_picker_mode(app->view_browser, true);
         tonie_view_browser_update_library(app->view_browser, &app->library);
@@ -478,9 +559,21 @@ static bool tonie_app_custom_event_callback(void* context, uint32_t event) {
         return true;
 
     case TonieCustomEventScanPickerBack:
-        app->browser_is_series_picker = false;
-        tonie_view_browser_set_picker_mode(app->view_browser, false);
-        view_dispatcher_switch_to_view(app->view_dispatcher, TonieViewIdScan);
+        if(app->library.level == TonieBrowseLevelFiles) {
+            /* Return from Level 2 (Tonie Picker) back to Level 1 (Series Picker) */
+            size_t prev_series_idx = app->library.saved_series_index;
+            tonie_storage_scan_series_for_picker(
+                app->storage, &app->library, app->scan_target_lang, app->config.ui_lang);
+            if(prev_series_idx < app->library.count) {
+                app->library.selected_index = prev_series_idx;
+            }
+            tonie_view_browser_update_library(app->view_browser, &app->library);
+        } else {
+            /* Return from Level 1 (Series Picker) back to Scan View */
+            app->browser_is_series_picker = false;
+            tonie_view_browser_set_picker_mode(app->view_browser, false);
+            view_dispatcher_switch_to_view(app->view_dispatcher, TonieViewIdScan);
+        }
         return true;
 
     case TonieCustomEventTextInputDone: {
@@ -495,8 +588,10 @@ static bool tonie_app_custom_event_callback(void* context, uint32_t event) {
                     en ? "My Series" : "Meine Serie");
             }
             app->text_input_for_series = false;
+            char series_copy[TONIE_MAX_SERIES_LEN];
+            snprintf(series_copy, sizeof(series_copy), "%s", app->scan_series_name);
             snprintf(
-                app->scan_tonie_name, sizeof(app->scan_tonie_name), "%s", app->scan_series_name);
+                app->scan_tonie_name, sizeof(app->scan_tonie_name), "%s", series_copy);
             tonie_app_prompt_text_input(
                 app,
                 en ? "Enter Tonie name:" : "Tonie-Name eingeben:",
@@ -504,36 +599,7 @@ static bool tonie_app_custom_event_callback(void* context, uint32_t event) {
                 sizeof(app->scan_tonie_name));
         } else {
             /* Both Series and Tonie name are set -> save .nfc file to SD card */
-            if(app->scan_tonie_name[0] == '\0') {
-                snprintf(
-                    app->scan_tonie_name,
-                    sizeof(app->scan_tonie_name),
-                    "%s",
-                    en ? "New Tonie" : "Neuer Tonie");
-            }
-            char new_nfc_path[TONIE_PATH_MAX];
-            bool ok = false;
-            if(tonie_storage_build_new_nfc_path(
-                   app->storage,
-                   app->scan_target_lang,
-                   app->scan_series_name,
-                   app->scan_tonie_name,
-                   new_nfc_path,
-                   sizeof(new_nfc_path))) {
-                ok = tonie_emulator_save_scanned(app->emulator, new_nfc_path);
-            }
-
-            app->browser_is_series_picker = false;
-            tonie_view_browser_set_picker_mode(app->view_browser, false);
-
-            if(ok) {
-                tonie_view_scan_set_saved_info(
-                    app->view_scan, app->scan_series_name, app->scan_tonie_name);
-            } else {
-                tonie_view_scan_set_state(
-                    app->view_scan, TonieScanStateError, app->scan_target_lang);
-            }
-            view_dispatcher_switch_to_view(app->view_dispatcher, TonieViewIdScan);
+            tonie_app_save_scanned_tonie(app);
         }
         return true;
     }
@@ -607,37 +673,75 @@ static bool tonie_app_custom_event_callback(void* context, uint32_t event) {
 
         const TonieItem* item = &app->library.items[app->library.selected_index];
 
-        /* Handle selection when Browser is in Series-Picker mode for saving a scanned Tonie */
+        /* Handle selection when Browser is in Two-Level Picker mode for saving a scanned Tonie */
         if(app->browser_is_series_picker) {
             bool en = (app->config.ui_lang == TonieUiLangEn);
-            if(app->library.selected_index == 0 && item->fav_index == 0xFE) {
-                /* [+ Neue Serie anlegen] / [+ Create new series] selected */
-                app->text_input_for_series = true;
-                snprintf(
-                    app->scan_series_name,
-                    sizeof(app->scan_series_name),
-                    "%s",
-                    en ? "New Series" : "Neue Serie");
-                tonie_app_prompt_text_input(
-                    app,
-                    en ? "Enter new series:" : "Neue Serie eingeben:",
-                    app->scan_series_name,
-                    sizeof(app->scan_series_name));
+            if(app->library.level == TonieBrowseLevelSeries) {
+                /* Level 1: Series selection (Freetext OR Series from list) */
+                if(app->library.selected_index == 0 &&
+                   item->fav_index == TONIE_PICKER_ACTION_FREETEXT) {
+                    app->text_input_for_series = true;
+                    snprintf(
+                        app->scan_series_name,
+                        sizeof(app->scan_series_name),
+                        "%s",
+                        en ? "New Series" : "Neue Serie");
+                    tonie_app_prompt_text_input(
+                        app,
+                        en ? "Enter new series:" : "Neue Serie eingeben:",
+                        app->scan_series_name,
+                        sizeof(app->scan_series_name));
+                } else {
+                    app->library.saved_series_index = app->library.selected_index;
+                    snprintf(
+                        app->scan_series_name,
+                        sizeof(app->scan_series_name),
+                        "%s",
+                        item->entry_name);
+                    tonie_storage_scan_episodes_for_picker(
+                        app->storage,
+                        &app->library,
+                        app->scan_target_lang,
+                        app->scan_series_name,
+                        app->config.ui_lang);
+                    if(app->scan_tonie_name[0] != '\0') {
+                        for(size_t i = 1; i < app->library.count; i++) {
+                            if(strcasecmp(
+                                   app->library.items[i].entry_name, app->scan_tonie_name) == 0) {
+                                app->library.selected_index = i;
+                                break;
+                            }
+                        }
+                    }
+                    tonie_view_browser_update_library(app->view_browser, &app->library);
+                }
             } else {
-                /* Existing Series folder selected */
-                snprintf(
-                    app->scan_series_name,
-                    sizeof(app->scan_series_name),
-                    "%s",
-                    item->entry_name);
-                app->text_input_for_series = false;
-                tonie_storage_get_item_display_name(
-                    item, app->scan_tonie_name, sizeof(app->scan_tonie_name));
-                tonie_app_prompt_text_input(
-                    app,
-                    en ? "Enter Tonie name:" : "Tonie-Name eingeben:",
-                    app->scan_tonie_name,
-                    sizeof(app->scan_tonie_name));
+                /* Level 2: Tonie/Episode selection (Freetext OR Tonie from tonies.json list) */
+                if(app->library.selected_index == 0 &&
+                   item->fav_index == TONIE_PICKER_ACTION_FREETEXT) {
+                    app->text_input_for_series = false;
+                    if(app->scan_tonie_name[0] == '\0') {
+                        char series_copy[TONIE_MAX_SERIES_LEN];
+                        snprintf(series_copy, sizeof(series_copy), "%s", app->scan_series_name);
+                        snprintf(
+                            app->scan_tonie_name,
+                            sizeof(app->scan_tonie_name),
+                            "%s",
+                            series_copy);
+                    }
+                    tonie_app_prompt_text_input(
+                        app,
+                        en ? "Enter Tonie name:" : "Tonie-Name eingeben:",
+                        app->scan_tonie_name,
+                        sizeof(app->scan_tonie_name));
+                } else {
+                    snprintf(
+                        app->scan_tonie_name,
+                        sizeof(app->scan_tonie_name),
+                        "%s",
+                        item->entry_name);
+                    tonie_app_save_scanned_tonie(app);
+                }
             }
             return true;
         }

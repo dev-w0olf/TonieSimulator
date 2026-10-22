@@ -16,4 +16,5 @@ App(
     fap_author="W0olf",
     fap_weburl="https://github.com/W0olf/tonie-simulator",
     fap_icon_assets="images",
+    fap_file_assets="assets",
 )

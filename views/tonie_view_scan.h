@@ -52,12 +52,15 @@ void tonie_view_scan_set_state(
     TonieLang default_lang);
 
 /**
- * @brief Populate the view with the UID and protocol of a successfully read Tonie tag.
+ * @brief Populate the view with the UID, protocol, and optional matched library info
+ *        of a successfully read Tonie tag.
  */
 void tonie_view_scan_set_tag_info(
     TonieViewScan* instance,
     const uint8_t* uid,
-    bool is_slix);
+    bool is_slix,
+    const char* matched_series,
+    const char* matched_name);
 
 /**
  * @brief Show confirmation screen after saving the scanned Tonie to SD card.

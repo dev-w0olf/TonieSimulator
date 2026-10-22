@@ -13,9 +13,15 @@
 
 #define TONIE_ROOT_PATH EXT_PATH("nfc/flipper-zero-tonies")
 #define TONIE_CONFIG_PATH EXT_PATH("nfc/flipper-zero-tonies/tonie_simulator.cfg")
+#define TONIE_UID_CACHE_PATH EXT_PATH("nfc/flipper-zero-tonies/tonie_uid_cache.txt")
+#define TONIE_CATALOG_SD_PATH EXT_PATH("nfc/flipper-zero-tonies/tonies_catalog.txt")
+#define TONIE_CATALOG_ASSETS_PATH APP_ASSETS_PATH("tonies_catalog.txt")
 #define TONIE_TONIES_PATH EXT_PATH("nfc/flipper-zero-tonies/tonies")
 #define TONIE_GERMAN_PATH EXT_PATH("nfc/flipper-zero-tonies/tonies/German")
 #define TONIE_ENGLISH_PATH EXT_PATH("nfc/flipper-zero-tonies/tonies/English")
+
+/* Special fav_index marker for Freetext option at index 0 in Picker Mode */
+#define TONIE_PICKER_ACTION_FREETEXT 0xFE
 
 /* Legacy fallback paths if a user placed files directly under flipper-zero-tonies/German */
 #define TONIE_LEGACY_GERMAN_PATH EXT_PATH("nfc/flipper-zero-tonies/German")
@@ -163,14 +169,49 @@ const char* tonie_storage_get_lang_label(TonieLang lang);
 const char* tonie_storage_get_lang_path(Storage* storage, TonieLang lang);
 
 /**
- * @brief Populate `library` with `[+ Neue Serie anlegen]` / `[+ Create new series]` at index 0
- *        followed by all existing Series folders in the target language directory.
+ * @brief Populate `library` with `[+ Neue Serie (Freitext)]` at index 0
+ *        followed by all Series folders from the SD card and tonies_catalog.txt.
  */
 size_t tonie_storage_scan_series_for_picker(
     Storage* storage,
     TonieLibrary* library,
     TonieLang lang,
     TonieUiLang ui_lang);
+
+/**
+ * @brief Populate `library` with `[+ Eigener Name (Freitext)]` at index 0
+ *        followed by all Tonie episodes for `series_name` from tonies_catalog.txt
+ *        and the local SD card series directory.
+ */
+size_t tonie_storage_scan_episodes_for_picker(
+    Storage* storage,
+    TonieLibrary* library,
+    TonieLang lang,
+    const char* series_name,
+    TonieUiLang ui_lang);
+
+/**
+ * @brief Look up a scanned 8-byte UID in the flat SD card index (`tonie_uid_cache.txt`)
+ *        in O(1) file opens (< 5 ms).
+ */
+bool tonie_storage_find_by_uid(
+    Storage* storage,
+    const uint8_t* uid,
+    TonieLang* out_lang,
+    char* out_series,
+    size_t out_series_size,
+    char* out_name,
+    size_t out_name_size);
+
+/**
+ * @brief Append a saved Tonie's 8-byte UID and Series/Tonie name to `tonie_uid_cache.txt`.
+ */
+void tonie_storage_register_uid(
+    Storage* storage,
+    const uint8_t* uid,
+    TonieLang lang,
+    const char* series_name,
+    const char* tonie_name);
 
 /**
  * @brief Sanitize a user-entered string for FAT32 directory or filename usage.

@@ -32,6 +32,7 @@ typedef struct {
     TonieUiLang ui_lang;
     uint8_t uid[TONIE_UID_LEN];
     bool is_slix;
+    bool is_known;
     uint8_t anim_step;
     char saved_series[TONIE_MAX_SERIES_LEN];
     char saved_name[TONIE_MAX_NAME_LEN];
@@ -147,25 +148,36 @@ static void tonie_view_scan_draw_callback(Canvas* canvas, void* context) {
         canvas_draw_str(canvas, 26, 26, en ? "TONIE FOUND!" : "TONIE ERKANNT!");
 
         canvas_set_font(canvas, FontSecondary);
-        const char* proto_str = model->is_slix ?
-                                    (en ? "Type: ICODE SLIX" : "Typ: ICODE SLIX") :
-                                    (en ? "Type: ISO15693" : "Typ: ISO15693");
-        canvas_draw_str(canvas, 26, 36, proto_str);
+        if(model->is_known) {
+            char fitted_series[TONIE_MAX_SERIES_LEN];
+            char fitted_name[TONIE_MAX_NAME_LEN];
+            tonie_view_scan_fit_text(
+                canvas, model->saved_series, fitted_series, sizeof(fitted_series), 94);
+            tonie_view_scan_fit_text(
+                canvas, model->saved_name, fitted_name, sizeof(fitted_name), 94);
+            canvas_draw_str(canvas, 26, 36, fitted_series);
+            canvas_draw_str(canvas, 26, 46, fitted_name);
+        } else {
+            const char* proto_str = model->is_slix ?
+                                        (en ? "Type: ICODE SLIX" : "Typ: ICODE SLIX") :
+                                        (en ? "Type: ISO15693" : "Typ: ISO15693");
+            canvas_draw_str(canvas, 26, 36, proto_str);
 
-        char uid_str[32];
-        snprintf(
-            uid_str,
-            sizeof(uid_str),
-            "%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X",
-            model->uid[0],
-            model->uid[1],
-            model->uid[2],
-            model->uid[3],
-            model->uid[4],
-            model->uid[5],
-            model->uid[6],
-            model->uid[7]);
-        canvas_draw_str(canvas, 26, 46, uid_str);
+            char uid_str[32];
+            snprintf(
+                uid_str,
+                sizeof(uid_str),
+                "%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X",
+                model->uid[0],
+                model->uid[1],
+                model->uid[2],
+                model->uid[3],
+                model->uid[4],
+                model->uid[5],
+                model->uid[6],
+                model->uid[7]);
+            canvas_draw_str(canvas, 26, 46, uid_str);
+        }
 
         /* Footer */
         canvas_draw_line(canvas, 0, 52, 127, 52);
@@ -401,7 +413,9 @@ void tonie_view_scan_set_state(
 void tonie_view_scan_set_tag_info(
     TonieViewScan* instance,
     const uint8_t* uid,
-    bool is_slix) {
+    bool is_slix,
+    const char* matched_series,
+    const char* matched_name) {
     furi_check(instance);
 
     with_view_model(
@@ -414,6 +428,27 @@ void tonie_view_scan_set_tag_info(
                 memcpy(model->uid, uid, TONIE_UID_LEN);
             } else {
                 memset(model->uid, 0, TONIE_UID_LEN);
+            }
+
+            if(matched_series && matched_series[0] != '\0' && matched_name &&
+               matched_name[0] != '\0') {
+                model->is_known = true;
+                bool en = (model->ui_lang == TonieUiLangEn);
+                snprintf(
+                    model->saved_series,
+                    sizeof(model->saved_series),
+                    "%s: %s",
+                    en ? "Series" : "Serie",
+                    matched_series);
+                snprintf(
+                    model->saved_name,
+                    sizeof(model->saved_name),
+                    "Tonie: %s",
+                    matched_name);
+            } else {
+                model->is_known = false;
+                model->saved_series[0] = '\0';
+                model->saved_name[0] = '\0';
             }
         },
         true);
