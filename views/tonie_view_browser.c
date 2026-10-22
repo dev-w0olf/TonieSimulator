@@ -154,10 +154,14 @@ static void tonie_view_browser_draw_header(Canvas* canvas, const TonieBrowserMod
     snprintf(counter_str, sizeof(counter_str), "[%zu/%zu]", current, count);
     canvas_draw_str(canvas, 2, 10, counter_str);
 
-    /* Right side: either Series Picker title or Interactive 3-Tab Selector [DE | EN | FAV] */
+    /* Right side: either Picker title or Interactive 3-Tab Selector [DE | EN | FAV] */
     if(model->picker_mode) {
-        const char* picker_title =
-            (model->ui_lang == TonieUiLangEn) ? "SELECT SERIES" : "SERIE WAEHLEN";
+        const char* picker_title = NULL;
+        if(model->level == TonieBrowseLevelFiles) {
+            picker_title = (model->ui_lang == TonieUiLangEn) ? "SELECT TONIE" : "TONIE WAEHLEN";
+        } else {
+            picker_title = (model->ui_lang == TonieUiLangEn) ? "SELECT SERIES" : "SERIE WAEHLEN";
+        }
         canvas_draw_str_aligned(canvas, 125, 10, AlignRight, AlignBottom, picker_title);
         return;
     }
@@ -320,13 +324,15 @@ static void tonie_view_browser_draw_footer(Canvas* canvas, const TonieBrowserMod
     bool en = (model->ui_lang == TonieUiLangEn);
 
     if(model->picker_mode) {
-        canvas_draw_str_aligned(
-            canvas,
-            64,
-            62,
-            AlignCenter,
-            AlignBottom,
-            en ? "[OK] Select series  [Back]" : "[OK] Serie waehlen  [Back]");
+        const char* footer_lbl = NULL;
+        if(model->level == TonieBrowseLevelFiles) {
+            footer_lbl =
+                en ? "[OK] Save Tonie     [Back]" : "[OK] Tonie speichern [Back]";
+        } else {
+            footer_lbl =
+                en ? "[OK] Select series  [Back]" : "[OK] Serie waehlen  [Back]";
+        }
+        canvas_draw_str_aligned(canvas, 64, 62, AlignCenter, AlignBottom, footer_lbl);
         return;
     }
 
