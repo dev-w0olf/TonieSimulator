@@ -19,6 +19,9 @@ struct TonieEmulator {
     bool is_running;
     bool is_scanning;
     bool scan_valid;
+    bool tag_detected_notified;
+    uint8_t consecutive_errors;
+    uint8_t privacy_pwd_idx;
     bool led_enabled;
     bool vibro_enabled;
     TonieEmulatorRxCallback rx_callback;
@@ -78,32 +81,6 @@ static NfcCommand tonie_emulator_listener_callback(NfcGenericEvent event, void* 
     return NfcCommandContinue;
 }
 
-static void tonie_emulator_scanner_callback(NfcScannerEvent event, void* context) {
-    TonieEmulator* instance = context;
-    if(!instance) {
-        return;
-    }
-
-    if(event.type == NfcScannerEventTypeDetected) {
-        NfcProtocol chosen = NfcProtocolInvalid;
-        for(size_t i = 0; i < event.data.protocol_num; i++) {
-            if(event.data.protocols[i] == NfcProtocolSlix) {
-                chosen = NfcProtocolSlix;
-                break;
-            } else if(event.data.protocols[i] == NfcProtocolIso15693_3) {
-                chosen = NfcProtocolIso15693_3;
-            }
-        }
-
-        if(chosen != NfcProtocolInvalid) {
-            instance->detected_protocol = chosen;
-            if(instance->scan_detected_callback) {
-                instance->scan_detected_callback(instance->scan_context);
-            }
-        }
-    }
-}
-
 static NfcCommand tonie_emulator_poller_callback(NfcGenericEvent event, void* context) {
     TonieEmulator* instance = context;
     if(!instance || !instance->nfc_poller) {
@@ -111,8 +88,26 @@ static NfcCommand tonie_emulator_poller_callback(NfcGenericEvent event, void* co
     }
 
     if(event.protocol == NfcProtocolSlix) {
+        SlixPoller* slix_poller = event.instance;
         const SlixPollerEvent* slix_event = event.event_data;
-        if(slix_event->type == SlixPollerEventTypeReady) {
+        if(slix_event->type == SlixPollerEventTypePrivacyUnlockRequest) {
+            if(!instance->tag_detected_notified) {
+                instance->tag_detected_notified = true;
+                if(instance->scan_detected_callback) {
+                    instance->scan_detected_callback(instance->scan_context);
+                }
+            }
+            if(slix_event->data) {
+                slix_event->data->privacy_password.password_set = false;
+            }
+            return NfcCommandContinue;
+        } else if(slix_event->type == SlixPollerEventTypeReady) {
+            if(!instance->tag_detected_notified) {
+                instance->tag_detected_notified = true;
+                if(instance->scan_detected_callback) {
+                    instance->scan_detected_callback(instance->scan_context);
+                }
+            }
             nfc_device_set_data(
                 instance->nfc_device,
                 NfcProtocolSlix,
@@ -123,10 +118,76 @@ static NfcCommand tonie_emulator_poller_callback(NfcGenericEvent event, void* co
             }
             return NfcCommandStop;
         } else if(slix_event->type == SlixPollerEventTypeError) {
-            if(instance->scan_result_callback) {
-                instance->scan_result_callback(instance->scan_context, false);
+            if(slix_event->data && slix_event->data->error == SlixErrorNotSupported) {
+                const SlixData* slix_data = nfc_poller_get_data(instance->nfc_poller);
+                const Iso15693_3Data* iso_data = slix_data ? slix_get_base_data(slix_data) : NULL;
+                if(iso_data) {
+                    if(!instance->tag_detected_notified) {
+                        instance->tag_detected_notified = true;
+                        if(instance->scan_detected_callback) {
+                            instance->scan_detected_callback(instance->scan_context);
+                        }
+                    }
+                    nfc_device_set_data(
+                        instance->nfc_device, NfcProtocolIso15693_3, iso_data);
+                    instance->scan_valid = true;
+                    if(instance->scan_result_callback) {
+                        instance->scan_result_callback(instance->scan_context, true);
+                    }
+                    return NfcCommandStop;
+                }
             }
-            return NfcCommandStop;
+
+            /*
+             * Two common cases reach SlixPollerEventTypeError:
+             * 1. A Kreativ-Tonie / Tonie is in NXP ICODE SLIX-L Privacy Mode and ignores
+             *    standard ISO15693 INVENTORY commands until unlocked via GET RANDOM NUMBER
+             *    + SET PASSWORD (Privacy).
+             * 2. A Tonie is entering the RF field and had a transient frame/CRC timeout.
+             *    Never abort on transient errors; keep polling until Ready succeeds.
+             */
+            if(slix_poller) {
+                SlixRandomNumber rn = 0;
+                if(slix_poller_get_random_number(slix_poller, &rn) == SlixErrorNone) {
+                    if(!instance->tag_detected_notified) {
+                        instance->tag_detected_notified = true;
+                        if(instance->scan_detected_callback) {
+                            instance->scan_detected_callback(instance->scan_context);
+                        }
+                    }
+                    instance->consecutive_errors++;
+                    /*
+                     * On the first transient error (consecutive_errors == 1), let the next
+                     * standard INVENTORY cycle retry cleanly (avoids sending SET_PASSWORD to
+                     * normal Tonies that merely had a frame glitch while entering the field).
+                     * If INVENTORY still fails while GET_RANDOM_NUMBER succeeds, the tag is
+                     * in SLIX-L Privacy Mode -> unlock it with the Tonie privacy passwords.
+                     */
+                    if((instance->consecutive_errors & 1U) == 0U) {
+                        static const SlixPassword k_privacy_passwords[] = {
+                            0x0F0F0F0FUL,
+                            0x00000000UL,
+                            0xFFFFFFFFUL,
+                        };
+                        SlixPassword pwd = k_privacy_passwords
+                            [instance->privacy_pwd_idx % COUNT_OF(k_privacy_passwords)];
+                        instance->privacy_pwd_idx++;
+                        if(slix_poller_set_password(
+                               slix_poller, SlixPasswordTypePrivacy, pwd, rn) != SlixErrorNone) {
+                            if(slix_poller_get_random_number(slix_poller, &rn) == SlixErrorNone) {
+                                pwd = k_privacy_passwords
+                                    [instance->privacy_pwd_idx % COUNT_OF(k_privacy_passwords)];
+                                instance->privacy_pwd_idx++;
+                                (void)slix_poller_set_password(
+                                    slix_poller, SlixPasswordTypePrivacy, pwd, rn);
+                            }
+                        }
+                    }
+                } else {
+                    instance->consecutive_errors = 0;
+                }
+            }
+            return NfcCommandContinue;
         }
     } else if(event.protocol == NfcProtocolIso15693_3) {
         const Iso15693_3PollerEvent* iso_event = event.event_data;
@@ -141,10 +202,7 @@ static NfcCommand tonie_emulator_poller_callback(NfcGenericEvent event, void* co
             }
             return NfcCommandStop;
         } else if(iso_event->type == Iso15693_3PollerEventTypeError) {
-            if(instance->scan_result_callback) {
-                instance->scan_result_callback(instance->scan_context, false);
-            }
-            return NfcCommandStop;
+            return NfcCommandContinue;
         }
     }
 
@@ -164,6 +222,9 @@ TonieEmulator* tonie_emulator_alloc(void) {
     instance->is_running = false;
     instance->is_scanning = false;
     instance->scan_valid = false;
+    instance->tag_detected_notified = false;
+    instance->consecutive_errors = 0;
+    instance->privacy_pwd_idx = 0;
     instance->led_enabled = true;
     instance->vibro_enabled = true;
     instance->rx_callback = NULL;
@@ -309,27 +370,34 @@ bool tonie_emulator_start_scan(
 
     nfc_device_clear(instance->nfc_device);
     instance->scan_valid = false;
-    instance->detected_protocol = NfcProtocolInvalid;
+    instance->tag_detected_notified = false;
+    instance->consecutive_errors = 0;
+    instance->privacy_pwd_idx = 0;
+    instance->detected_protocol = NfcProtocolSlix;
     instance->scan_detected_callback = on_detected;
     instance->scan_result_callback = on_result;
     instance->scan_context = context;
 
-    instance->nfc_scanner = nfc_scanner_alloc(instance->nfc);
-    if(!instance->nfc_scanner) {
-        FURI_LOG_E(TAG, "Failed to allocate NfcScanner");
+    instance->nfc_poller = nfc_poller_alloc(instance->nfc, NfcProtocolSlix);
+    if(!instance->nfc_poller) {
+        FURI_LOG_E(TAG, "Failed to allocate NfcPoller for SLIX scan");
         return false;
     }
 
-    nfc_scanner_start(instance->nfc_scanner, tonie_emulator_scanner_callback, instance);
+    nfc_poller_start(instance->nfc_poller, tonie_emulator_poller_callback, instance);
     instance->is_scanning = true;
     tonie_emulator_led_scanning(instance);
 
-    FURI_LOG_I(TAG, "Started NFC scanner for Tonie tag");
+    FURI_LOG_I(TAG, "Started continuous SLIX poller for Tonie tag");
     return true;
 }
 
 bool tonie_emulator_start_poller(TonieEmulator* instance) {
     furi_check(instance);
+
+    if(instance->nfc_poller) {
+        return true;
+    }
 
     if(instance->nfc_scanner) {
         nfc_scanner_stop(instance->nfc_scanner);
@@ -337,15 +405,9 @@ bool tonie_emulator_start_poller(TonieEmulator* instance) {
         instance->nfc_scanner = NULL;
     }
 
-    if(instance->nfc_poller) {
-        nfc_poller_stop(instance->nfc_poller);
-        nfc_poller_free(instance->nfc_poller);
-        instance->nfc_poller = NULL;
-    }
-
     if(instance->detected_protocol != NfcProtocolSlix &&
        instance->detected_protocol != NfcProtocolIso15693_3) {
-        return false;
+        instance->detected_protocol = NfcProtocolSlix;
     }
 
     instance->nfc_poller = nfc_poller_alloc(instance->nfc, instance->detected_protocol);

@@ -19,7 +19,9 @@ Tonie-Simulator loads `.nfc` dumps from the Flipper Zero SD card, organizes them
 Key capabilities:
 - **Two-level library browser**: Browse up to 350 series folders and 350 `.nfc` files per folder. Supports nested subfolders and filenames up to 255 characters.
 - **Live NFC emulation**: Emulates NXP ICODE SLIX / ISO15693 tags with animated RF status, marquee title scrolling, 8-byte UID display, status LED, and haptic feedback.
-- **Integrated NFC scanner**: Reads physical Tonie figures on the back of the Flipper Zero and saves them under an existing or newly created series folder.
+- **Integrated NFC scanner & SLIX-L Privacy unlock**: Reads standard Tonies and Creative Tonies (including tags locked in NXP ICODE SLIX-L Privacy Mode) and saves them to the SD card.
+- **`tonies.json` catalog & freetext save picker**: Select series and episode titles from the optional `tonies.json` database or enter custom names via on-device text input.
+- **Instant UID duplicate detection**: Indexes saved UIDs in `tonie_uid_cache.txt` (`< 5 ms` lookup) to show existing series/title metadata immediately upon scanning.
 - **Favorites and on-device settings**: Toggle favorites with a long press on `OK`. Configure the UI language (`DE` / `EN`), default startup tab, marquee scroll speed, vibration, and LED feedback in the settings menu.
 
 ### Screenshots
@@ -43,6 +45,8 @@ Place `.nfc` files on the Flipper Zero SD card using the directory layout below.
 ```text
 /ext/nfc/flipper-zero-tonies/
 ├── tonie_simulator.cfg                  # Configuration and favorites (auto-generated)
+├── tonie_uid_cache.txt                  # Fast UID-to-Tonie index (auto-generated)
+├── tonies.json                          # Optional: tonies.json catalog for save picker
 └── tonies/
     ├── German/                          # DE tab
     │   ├── Benjamin Bluemchen/
@@ -56,6 +60,8 @@ Place `.nfc` files on the Flipper Zero SD card using the directory layout below.
             ├── Bluey.nfc
             └── Muffin.nfc
 ```
+
+To enable the catalog picker when saving scanned Tonies, download [`tonies.json`](https://raw.githubusercontent.com/toniebox-reverse-engineering/tonies-json/release/tonies.json) and copy it to `/ext/nfc/flipper-zero-tonies/tonies.json`.
 
 ### Controls
 
@@ -80,11 +86,11 @@ Place `.nfc` files on the Flipper Zero SD card using the directory layout below.
 
 1. Select `2. Scan Tonie` on the Splash screen and press `OK`.
 2. Use `Left` or `Right` to choose whether the figure belongs to the `DE` (`German`) or `EN` (`English`) library.
-3. Hold the Tonie figure flat against the back of the Flipper Zero until `TONIE FOUND!` appears with the 8-byte UID.
-4. Press `OK` to open the series picker:
-   - Choose `[+ Create new series]` at the top of the list to enter a new folder name, or
-   - Select an existing series folder from the list.
-5. Enter the Tonie name and confirm with `Save`. The `.nfc` file is written to `/ext/nfc/flipper-zero-tonies/tonies/<German|English>/<Series>/<Tonie>.nfc`.
+3. Hold the Tonie figure (or Creative Tonie) flat against the back of the Flipper Zero until `TONIE FOUND!` (or `ALREADY SAVED:` if the UID is already in the library) appears with the 8-byte UID.
+4. Press `OK` to open the two-level save picker:
+   - **Step 1 (Series)**: Choose `[+ Create new series]` at the top of the list for freetext input, or select an existing series from your SD card / `tonies.json` catalog.
+   - **Step 2 (Tonie)**: Choose `[+ Add new Tonie (Freetext)]` to enter a custom name, or select the episode directly from the `tonies.json` catalog list.
+5. The `.nfc` file is written to `/ext/nfc/flipper-zero-tonies/tonies/<German|English>/<Series>/<Tonie>.nfc` and indexed in `tonie_uid_cache.txt`.
 
 ### Installation
 
@@ -148,8 +154,10 @@ Der Tonie-Simulator lädt `.nfc`-Dumps von der SD-Karte des Flipper Zero, sortie
 Funktionsumfang:
 - **Zweistufiger Serien-Browser**: Unterstützt bis zu 350 Serien-Ordner und 350 `.nfc`-Dateien pro Ordner inklusive verschachtelter Unterordner und Dateinamen bis 255 Zeichen.
 - **Live-NFC-Emulation**: Emuliert NXP ICODE SLIX / ISO15693 Tags mit animierter Funkwellen-Anzeige, horizontalem Lauftext (Marquee), 8-Byte-UID, Status-LED und Vibrations-Feedback.
-- **Integrierter NFC-Scanner**: Liest physische Tonie-Figuren über die Rückseite des Flipper Zero ein und speichert sie in einer bestehenden oder neu angelegten Serie.
-- **Favoriten & Einstellungen am Gerät**: langes Drücken auf `OK` markiert Favoriten. In den Einstellungen lassen sich UI-Sprache (`DE` / `EN`), Start-Tab, Scroll-Tempo, Vibration und Status-LED anpassen.
+- **Integrierter NFC-Scanner & SLIX-L Privacy-Unlock**: Liest reguläre Tonies sowie Kreativ-Tonies (auch bei aktiviertem NXP ICODE SLIX-L Privacy Mode) über die Rückseite des Flipper Zero aus.
+- **`tonies.json`-Katalog & Freitext-Auswahl**: Beim Speichern gescannter Figuren kann auf beiden Ebenen (Serie und Tonie) frei zwischen eigener Texteingabe und der Auswahl aus dem optionalen `tonies.json`-Katalog gewählt werden.
+- **Sofortige Duplikat-Erkennung**: Gespeicherte UIDs werden in `tonie_uid_cache.txt` indiziert (`< 5 ms` Abfragezeit) und beim erneuten Scannen sofort mit Serien- und Episodennamen angezeigt.
+- **Favoriten & Einstellungen am Gerät**: Langes Drücken auf `OK` markiert Favoriten. In den Einstellungen lassen sich UI-Sprache (`DE` / `EN`), Start-Tab, Scroll-Tempo, Vibration und Status-LED anpassen.
 
 ### Screenshots
 
@@ -172,6 +180,8 @@ Lege die `.nfc`-Dateien in folgender Verzeichnisstruktur auf der SD-Karte ab. Fe
 ```text
 /ext/nfc/flipper-zero-tonies/
 ├── tonie_simulator.cfg                  # Konfigurations- und Favoritendatei (automatisch erstellt)
+├── tonie_uid_cache.txt                  # Schneller UID-Index für Duplikat-Erkennung (automatisch erstellt)
+├── tonies.json                          # Optional: tonies.json-Katalog für die Auswahl beim Speichern
 └── tonies/
     ├── German/                          # Tab DE
     │   ├── Benjamin Bluemchen/
@@ -185,6 +195,8 @@ Lege die `.nfc`-Dateien in folgender Verzeichnisstruktur auf der SD-Karte ab. Fe
             ├── Bluey.nfc
             └── Muffin.nfc
 ```
+
+Um beim Speichern gescannter Tonies die Katalog-Auswahl zu nutzen, kann die Datei [`tonies.json`](https://raw.githubusercontent.com/toniebox-reverse-engineering/tonies-json/release/tonies.json) unter `/ext/nfc/flipper-zero-tonies/tonies.json` abgelegt werden.
 
 ### Steuerung
 
@@ -209,11 +221,11 @@ Lege die `.nfc`-Dateien in folgender Verzeichnisstruktur auf der SD-Karte ab. Fe
 
 1. Im Hauptmenü `2. Tonie scannen` wählen und mit `OK` bestätigen.
 2. Mit `Links` oder `Rechts` auswählen, ob der Tonie unter `DE` (`German`) oder `EN` (`English`) gespeichert werden soll.
-3. Die Tonie-Figur flach an die Rückseite des Flipper Zero halten, bis `TONIE ERKANNT!` samt 8-Byte-UID angezeigt wird.
-4. `OK` drücken, um die Serien-Auswahl zu öffnen:
-   - Ersten Eintrag `[+ Neue Serie anlegen]` wählen, um einen neuen Serien-Ordner per Texteingabe zu erstellen, oder
-   - Einen vorhandenen Serien-Ordner aus der Liste auswählen.
-5. Den Namen des Tonies eingeben und speichern. Die `.nfc`-Datei wird unter `/ext/nfc/flipper-zero-tonies/tonies/<German|English>/<Serie>/<Tonie>.nfc` abgelegt.
+3. Die Tonie-Figur (oder den Kreativ-Tonie) flach an die Rückseite des Flipper Zero halten, bis `TONIE ERKANNT!` (bzw. `SCHON GESPEICHERT:`, falls die UID bereits vorhanden ist) samt 8-Byte-UID angezeigt wird.
+4. `OK` drücken, um die zweistufige Speicher-Auswahl zu öffnen:
+   - **Schritt 1 (Serie)**: `[+ Neue Serie anlegen]` für freie Texteingabe wählen oder eine Serie aus den vorhandenen SD-Ordnern bzw. dem `tonies.json`-Katalog auswählen.
+   - **Schritt 2 (Tonie)**: `[+ Neuen Tonie anlegen (Freitext)]` für eigene Benennung wählen oder die Episode direkt aus der `tonies.json`-Liste übernehmen.
+5. Die `.nfc`-Datei wird unter `/ext/nfc/flipper-zero-tonies/tonies/<German|English>/<Serie>/<Tonie>.nfc` gespeichert und in `tonie_uid_cache.txt` registriert.
 
 ### Installation
 
